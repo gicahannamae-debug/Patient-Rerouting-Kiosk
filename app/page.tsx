@@ -63,8 +63,8 @@ export default function Home(){
       <VsTemperature />
       <VsBloodpressure />
       <VsOximeter />
-      <CcMain />
       <CcRedflag />
+      <CcMain />
       <CcDental />
       <CcEnt />
       <CcFamilymedicine />

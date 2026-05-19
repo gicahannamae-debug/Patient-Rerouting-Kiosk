@@ -77,7 +77,6 @@ export default function CcRedflag() {
                   className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
                 >
                   <p className="text-red-100 text-base font-bold group-hover:text-white">Severe chest pain / gasping for air</p>
-                  <p className="text-red-300 text-xs mt-1 font-semibold">→ ER / Cardiology — RED ALERT</p>
                 </button>
 
                 {/* Red flag 2 */}
@@ -86,7 +85,6 @@ export default function CcRedflag() {
                   className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
                 >
                   <p className="text-red-100 text-base font-bold group-hover:text-white">Loss of consciousness / sudden paralysis</p>
-                  <p className="text-red-300 text-xs mt-1 font-semibold">→ Neurology ER — RED ALERT</p>
                 </button>
 
                 {/* Red flag 3 */}
@@ -95,8 +93,7 @@ export default function CcRedflag() {
                   className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
                 >
                   <p className="text-red-100 text-base font-bold group-hover:text-white">Heavy active bleeding / open fractures</p>
-                  <p className="text-red-300 text-xs mt-1 font-semibold">→ Trauma / Surgery ER — RED ALERT</p>
-                </button>
+                  </button>
 
                 {/* Red flag 4 */}
                 <button 
@@ -104,7 +101,6 @@ export default function CcRedflag() {
                   className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
                 >
                   <p className="text-red-100 text-base font-bold group-hover:text-white">Continuous seizures</p>
-                  <p className="text-red-300 text-xs mt-1 font-semibold">→ ER / Neurology — RED ALERT</p>
                 </button>
 
               </div>
