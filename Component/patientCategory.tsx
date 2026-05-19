@@ -38,7 +38,7 @@ console.log("Props PatienCat received:", {isPatientCat});
       </nav>
 
       <div>
-      <div className={` h-screen flex flex-col gap-[0.9rem] items-center justify-center bg-stone-100`}>
+      <div className={` h-screen flex flex-col gap-[0.9rem] items-center justify-center bg-cyan-950`}>
 
       {/* Patient Category Wrapper */}
         <div className=" flex flex-col text-center w-full justify-center align-center ">
@@ -47,9 +47,9 @@ console.log("Props PatienCat received:", {isPatientCat});
         </div>
 
      <div className="flex flex-row gap-[8rem]">
-        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-green-600 text-white px-[1rem] py-[.5rem] rounded-md hover:cursor-pointer"> Old Patient</button>
-        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-blue-600 text-white px-[1rem] py-[.5rem] rounded-md hover:cursor-pointer"> New Patient</button>
-        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-yellow-600 text-white px-[1rem] py-[.5rem] rounded-md hover:cursor-pointer"> Referred Patient</button>
+        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-orange-25 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md hover:cursor-pointer"> Old Patient</button>
+        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-orange-50 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md hover:cursor-pointer"> New Patient</button>
+        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-orange-75 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md hover:cursor-pointer"> Referred Patient</button>
         </div>
      </div>
 

@@ -46,10 +46,10 @@ console.log("Props received:", { isPatientCat, setIsPatientCat });
 </body>
 
     {/* Welcome Wrapper */}
-    <div className="flex flex-col gap-[9px] flex-1 items-center  justify-center bg-cyan-950 font-sans h-screen">
+    <div className="flex flex-col gap-[9px] flex-1 items-center  justify-center bg-cyan-950 font-sans w-full-absolute h-screen">
       <h1 className="text-[6rem] font-bold font-Sans-serif text-white ">Welcome to OPD</h1>
       <p className="w-[40rem] text-[1.51rem] flex text-center text-white ">Please use this Kiosk to begin with self triage. This will help us understand your need and expedite your care.</p>
-      <button onClick={handleForm} className=" text-[1.875rem] font-semibold hover:cursor-pointer bg-orange-50 text-cyan-950 px-[1.875rem] py-[.5rem] rounded-md">Start Self Service Triage </button>
+      <button onClick={handleForm} className=" text-[1.875rem] font-semibold hover:cursor-pointer bg-orange-50 hover:bg-orange-100 text-cyan-950 px-[1.875rem] py-[.5rem] rounded-md">Start Self Service Triage </button>
     </div>
 
     </div> 
