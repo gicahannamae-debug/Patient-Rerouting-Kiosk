@@ -42,14 +42,14 @@ console.log("Props PatienCat received:", {isPatientCat});
 
       {/* Patient Category Wrapper */}
         <div className=" flex flex-col text-center w-full justify-center align-center ">
-        <h1 className="text-[3rem] font-bold font-Sans-serif text-green-900">Patient Category</h1>
+        <h1 className="text-[3rem] font-bold font-Sans-serif text-white">Patient Category</h1>
         <p className="text-[1.7rem] font-serif">Please select what applies.</p>
         </div>
 
      <div className="flex flex-row gap-[8rem]">
-        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-orange-25 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md hover:cursor-pointer"> Old Patient</button>
-        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-orange-50 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md hover:cursor-pointer"> New Patient</button>
-        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-orange-75 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md hover:cursor-pointer"> Referred Patient</button>
+        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-green-300 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md "> Old Patient</button>
+        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-blue-300 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md "> New Patient</button>
+        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-red-300 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md "> Referred Patient</button>
         </div>
      </div>
 
