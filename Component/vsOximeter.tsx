@@ -46,7 +46,7 @@ export default function vsOximeter() {
           <div className="flex flex-col gap-[0.8rem] flex-1 border border-dashed border-cyan-600 rounded-lg p-[1.5rem]">
 
             <h2 className="text-[1.4rem] font-bold text-white">Procedure</h2>
-            <p className="text-[1rem] text-cyan-300">Please follow the instructions below to take your SpO₂ and Heart Rate reading.</p>
+            <p className="text-[1.3rem] text-cyan-300">Please follow the instructions below to take your SpO₂ and Heart Rate reading.</p>
 
             {[
               "Pick up the Pulse Oximeter device located on the right side of the kiosk.",
@@ -60,7 +60,7 @@ export default function vsOximeter() {
                 <div className="w-[1.8rem] h-[1.8rem] flex-shrink-0 rounded-full bg-cyan-950 text-white flex items-center justify-center text-[0.85rem] font-bold mt-[0.1rem]">
                   {i + 1}
                 </div>
-                <p className="text-[1rem] text-white leading-snug">{step}</p>
+                <p className="text-[1.3rem] text-white leading-snug">{step}</p>
               </div>
             ))}
 

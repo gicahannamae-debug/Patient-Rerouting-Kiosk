@@ -8,7 +8,19 @@ import HospitalNumber from "@/Component/hospitalNumber";
 import VsTemperature from "@/Component/vsTemperature";
 import VsBloodpressure from "@/Component/vsBloodpressure";
 import VsOximeter from "@/Component/vsOximeter";
-import ChiefComplaints from "@/Component/chiefComplaints";
+import CcMain from "@/Component/ccMain"
+import CcRedflag from "@/Component/ccRedflag";
+import CcSurgery from "@/Component/ccSurgery";
+import CcDental from "@/Component/ccDental";
+import CcEnt from "@/Component/ccEnt";
+import CcFamilymedicine from "@/Component/ccFamilymedicine";
+import CcNephrology from "@/Component/ccNephrology";
+import CcObgyn from "@/Component/ccObgyn";
+import CcOncology from "@/Component/ccOncology";
+import CcPediatrics from "@/Component/ccPediatrics";
+import CcPsychiatry from "@/Component/ccPsychiatry";
+import CcPulmonary from "@/Component/ccPulmonary";
+import CcOpthalmology from "@/Component/ccOpthalmology";
 import SummaryScreen, { SummaryScreenProps } from "@/Component/summaryScreen";
 
 export default function Home(){
@@ -51,7 +63,19 @@ export default function Home(){
       <VsTemperature />
       <VsBloodpressure />
       <VsOximeter />
-      <ChiefComplaints />
+      <CcMain />
+      <CcRedflag />
+      <CcDental />
+      <CcEnt />
+      <CcFamilymedicine />
+      <CcNephrology />
+      <CcObgyn />
+      <CcOncology />
+      <CcPediatrics />
+      <CcPsychiatry />
+      <CcPulmonary />
+      <CcOpthalmology />  
+      <CcSurgery />  
       <SummaryScreen {...summary} />
     </div>
   );

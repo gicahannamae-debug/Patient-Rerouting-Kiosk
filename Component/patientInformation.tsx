@@ -49,7 +49,7 @@ export default function patientInformation() {
               <label className="text-[1.1rem] font-semibold text-white">Last Name</label>
               <input
                 type="text"
-                placeholder="e.g. Dela Cruz"
+                placeholder="e.g. Gica"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
             </section>
@@ -58,7 +58,7 @@ export default function patientInformation() {
               <label className="text-[1.1rem] font-semibold text-white">First Name</label>
               <input
                 type="text"
-                placeholder="e.g. Juan"
+                placeholder="e.g. Hanna Mae"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
             </section>
@@ -67,7 +67,7 @@ export default function patientInformation() {
               <label className="text-[1.1rem] font-semibold text-white">Middle Name</label>
               <input
                 type="text"
-                placeholder="e.g. Santos"
+                placeholder="e.g. Tanggan"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
             </section>

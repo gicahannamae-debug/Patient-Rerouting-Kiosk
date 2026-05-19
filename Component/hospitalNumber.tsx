@@ -197,7 +197,7 @@ export default function hospitalNumber() {
               type="submit"
               className="text-[1.3rem] font-semibold bg-orange-50 text-cyan-950 px-[3rem] py-[0.6rem] rounded-md hover:bg-orange-100 cursor-pointer"
             >
-              Retrieve Record
+              Proceed
             </button>
 
           </div>
