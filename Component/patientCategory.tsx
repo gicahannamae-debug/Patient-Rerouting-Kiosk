@@ -47,9 +47,9 @@ console.log("Props PatienCat received:", {isPatientCat});
         </div>
 
      <div className="flex flex-row gap-[8rem]">
-        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-green-300 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md "> Old Patient</button>
-        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-blue-300 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md "> New Patient</button>
-        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-red-300 hower:bg-orange-100 text-white px-[1rem] py-[.5rem] rounded-md "> Referred Patient</button>
+        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-white  text-green-600 px-[1rem] py-[.5rem] rounded-md hover:bg-yellow-100 cursor-pointer"> Old Patient</button>
+        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-white  text-blue-600 px-[1rem] py-[.5rem] rounded-md  hover:bg-yellow-100 cursor-pointer"> New Patient</button>
+        <button className=" w-[16rem] h-[16rem] text-[3rem] font-semibold bg-white  text-pink-600 px-[1rem] py-[.5rem] rounded-md hover:bg-yellow-100 cursor-pointer"> Referred Patient</button>
         </div>
      </div>
 

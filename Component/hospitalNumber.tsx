@@ -17,7 +17,7 @@ export default function hospitalNumber() {
 
           <div className="pr-[2rem]">
             <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
-              <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
+              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Triage Form |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>

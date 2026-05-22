@@ -21,6 +21,7 @@ import CcPediatrics from "@/Component/ccPediatrics";
 import CcPsychiatry from "@/Component/ccPsychiatry";
 import CcPulmonary from "@/Component/ccPulmonary";
 import CcOpthalmology from "@/Component/ccOpthalmology";
+import CcInputconcern from "@/Component/ccInputconcern"
 import SummaryScreen, { SummaryScreenProps } from "@/Component/summaryScreen";
 
 export default function Home(){
@@ -76,6 +77,7 @@ export default function Home(){
       <CcPulmonary />
       <CcOpthalmology />  
       <CcSurgery />  
+      <CcInputconcern/>
       <SummaryScreen {...summary} />
     </div>
   );

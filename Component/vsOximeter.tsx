@@ -1,7 +1,38 @@
 'use client'
-import React from "react";
+import React, { useMemo, useState } from "react";
+
+const SPO2_CATEGORIES = [
+  { label: "Normal", range: "95% – 100%", min: 95, max: 101, color: "bg-green-400" },
+  { label: "Acceptable", range: "91% – 94%", min: 91, max: 95, color: "bg-yellow-400" },
+  { label: "Low", range: "86% – 90%", min: 86, max: 91, color: "bg-orange-400" },
+  { label: "Critical", range: "≤ 85%", min: 0, max: 86, color: "bg-red-500" },
+];
+
+const HR_CATEGORIES = [
+  { label: "Bradycardia", range: "< 60 bpm", min: 0, max: 60, color: "bg-blue-400" },
+  { label: "Normal", range: "60 – 100 bpm", min: 60, max: 101, color: "bg-green-400" },
+  { label: "Tachycardia", range: "> 100 bpm", min: 101, max: 1000, color: "bg-orange-400" },
+];
 
 export default function vsOximeter() {
+  const [spo2, setSpo2] = useState("");
+  const [heartRate, setHeartRate] = useState("");
+
+  const spo2Value = parseFloat(spo2);
+  const heartRateValue = parseFloat(heartRate);
+  const isValidSpo2 = !Number.isNaN(spo2Value) && spo2Value >= 50 && spo2Value <= 100;
+  const isValidHeartRate = !Number.isNaN(heartRateValue) && heartRateValue >= 30 && heartRateValue <= 250;
+
+  const spo2Category = useMemo(() => {
+    if (!isValidSpo2) return null;
+    return SPO2_CATEGORIES.find((item) => spo2Value >= item.min && spo2Value < item.max) ?? null;
+  }, [spo2Value, isValidSpo2]);
+
+  const heartRateCategory = useMemo(() => {
+    if (!isValidHeartRate) return null;
+    return HR_CATEGORIES.find((item) => heartRateValue >= item.min && heartRateValue < item.max) ?? null;
+  }, [heartRateValue, isValidHeartRate]);
+
   return (
 
     <div className="">
@@ -18,7 +49,7 @@ export default function vsOximeter() {
           <div className="pr-[2rem]">
             <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
               <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
+              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Vital Signs |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
             </ul>
@@ -107,36 +138,26 @@ export default function vsOximeter() {
                 />
               </section>
 
-              {/* SpO2 Classification reference */}
-              <div className="flex flex-col gap-[0.3rem] bg-cyan-950 rounded-lg px-[0.9rem] py-[0.7rem]">
-                <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider mb-[0.2rem]">SpO₂ Classification</p>
-                {[
-                  { label: "Normal",        range: "95% – 100%", dot: "bg-green-400" },
-                  { label: "Acceptable",    range: "91% – 94%",  dot: "bg-yellow-400" },
-                  { label: "Low",           range: "86% – 90%",  dot: "bg-orange-400" },
-                  { label: "Critical",      range: "≤ 85%",      dot: "bg-red-500"   },
-                ].map((item) => (
-                  <div key={item.label} className="flex flex-row items-center gap-[0.5rem]">
-                    <div className={`w-[0.6rem] h-[0.6rem] rounded-full flex-shrink-0 ${item.dot}`} />
-                    <p className="text-[0.78rem] text-white">{item.label}</p>
-                    <p className="text-[0.78rem] text-cyan-400 ml-auto">{item.range}</p>
-                  </div>
-                ))}
-
-                <div className="border-t border-cyan-800 mt-[0.3rem] pt-[0.4rem]">
-                  <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider mb-[0.2rem]">Heart Rate Classification</p>
+              {/* Patient Oxygen Results */}
+              <div className="flex flex-col gap-[0.75rem] bg-cyan-950 rounded-lg px-[0.9rem] py-[0.9rem]">
+                <div className="text-center">
+                  <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider">Patient Oxygen Results</p>
                 </div>
-                {[
-                  { label: "Bradycardia",  range: "< 60 bpm",      dot: "bg-blue-400"   },
-                  { label: "Normal",       range: "60 – 100 bpm",   dot: "bg-green-400"  },
-                  { label: "Tachycardia",  range: "> 100 bpm",      dot: "bg-orange-400" },
-                ].map((item) => (
-                  <div key={item.label} className="flex flex-row items-center gap-[0.5rem]">
-                    <div className={`w-[0.6rem] h-[0.6rem] rounded-full flex-shrink-0 ${item.dot}`} />
-                    <p className="text-[0.78rem] text-white">{item.label}</p>
-                    <p className="text-[0.78rem] text-cyan-400 ml-auto">{item.range}</p>
-                  </div>
-                ))}
+
+                <div className="rounded-lg border border-cyan-600 bg-cyan-900 p-[1rem] text-white">
+                  {spo2 === "" && heartRate === "" ? (
+                    <p className="text-[0.95rem] text-cyan-300">Enter SpO₂ and heart rate values to see the result here.</p>
+                  ) : !isValidSpo2 || !isValidHeartRate ? (
+                    <p className="text-[0.95rem] text-yellow-300">Please enter valid values: SpO₂ 50–100% and HR 30–250 bpm.</p>
+                  ) : (
+                    <>
+                      <p className="text-[0.95rem] text-cyan-300">SpO₂: <span className="font-semibold text-white">{spo2Value.toFixed(0)}%</span></p>
+                      <p className="text-[0.95rem]">SpO₂ status: <span className="font-bold text-white">{spo2Category?.label ?? "Unknown"}</span></p>
+                      <p className="text-[0.95rem] text-cyan-300 mt-[0.5rem]">Heart Rate: <span className="font-semibold text-white">{heartRateValue.toFixed(0)} bpm</span></p>
+                      <p className="text-[0.95rem]">HR status: <span className="font-bold text-white">{heartRateCategory?.label ?? "Unknown"}</span></p>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Buttons */}

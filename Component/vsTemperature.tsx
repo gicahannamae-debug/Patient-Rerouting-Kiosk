@@ -1,7 +1,26 @@
 'use client'
-import React from "react";
+import React, { useMemo, useState } from "react";
 
-export default function vsTemperature() {
+const TEMPERATURE_CATEGORIES = [
+  { label: "Hypothermia", range: "< 35.0 °C", min: Number.NEGATIVE_INFINITY, max: 35.0, color: "bg-blue-400" },
+  { label: "Normal", range: "35.0 – 37.2 °C", min: 35.0, max: 37.3, color: "bg-green-400" },
+  { label: "Low-grade Fever", range: "37.3 – 38.0 °C", min: 37.3, max: 38.1, color: "bg-yellow-400" },
+  { label: "Moderate Fever", range: "38.1 – 39.0 °C", min: 38.1, max: 39.1, color: "bg-orange-400" },
+  { label: "High Fever", range: "39.1 – 40.0 °C", min: 39.1, max: 40.1, color: "bg-red-500" },
+  { label: "Hyperpyrexia", range: "> 40.0 °C", min: 40.1, max: Number.POSITIVE_INFINITY, color: "bg-red-700" },
+];
+
+export default function VsTemperature() {
+  const [temperature, setTemperature] = useState("");
+
+  const temperatureValue = parseFloat(temperature);
+  const isValidTemperature = !Number.isNaN(temperatureValue) && temperatureValue >= 30 && temperatureValue <= 45;
+
+  const category = useMemo(() => {
+    if (!isValidTemperature) return null;
+    return TEMPERATURE_CATEGORIES.find((item) => temperatureValue >= item.min && temperatureValue < item.max) ?? null;
+  }, [temperatureValue, isValidTemperature]);
+
   return (
 
     <div className="">
@@ -18,7 +37,7 @@ export default function vsTemperature() {
           <div className="pr-[2rem]">
             <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
               <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
+              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Vital Signs |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
             </ul>
@@ -91,27 +110,31 @@ export default function vsTemperature() {
                   min="30"
                   max="45"
                   step="0.1"
+                  value={temperature}
+                  onChange={(event) => setTemperature(event.target.value)}
                   className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
                 />
               </section>
 
-              {/* Temperature Classification reference */}
-              <div className="flex flex-col gap-[0.3rem] bg-cyan-950 rounded-lg px-[0.9rem] py-[0.7rem]">
-                <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider mb-[0.2rem]">Temperature Classification</p>
-                {[
-                  { label: "Hypothermia",     range: "< 35.0 °C",        dot: "bg-blue-400"   },
-                  { label: "Normal",          range: "35.0 – 37.2 °C",   dot: "bg-green-400"  },
-                  { label: "Low-grade Fever", range: "37.3 – 38.0 °C",   dot: "bg-yellow-400" },
-                  { label: "Moderate Fever",  range: "38.1 – 39.0 °C",   dot: "bg-orange-400" },
-                  { label: "High Fever",      range: "39.1 – 40.0 °C",   dot: "bg-red-500"    },
-                  { label: "Hyperpyrexia",    range: "> 40.0 °C",        dot: "bg-red-700"    },
-                ].map((item) => (
-                  <div key={item.label} className="flex flex-row items-center gap-[0.5rem]">
-                    <div className={`w-[0.6rem] h-[0.6rem] rounded-full flex-shrink-0 ${item.dot}`} />
-                    <p className="text-[0.78rem] text-white">{item.label}</p>
-                    <p className="text-[0.78rem] text-cyan-400 ml-auto">{item.range}</p>
-                  </div>
-                ))}
+              {/* Patient Temperature Results */}
+              <div className="flex flex-col gap-[0.75rem] bg-cyan-950 rounded-lg px-[0.9rem] py-[0.9rem]">
+                <div className="text-center">
+                  <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider">Patient Temperature Results</p>
+                </div>
+
+                <div className="rounded-lg border border-cyan-600 bg-cyan-900 p-[1rem] text-white">
+                  {temperature === "" ? (
+                    <p className="text-[0.95rem] text-cyan-300">Enter a temperature to see the result here.</p>
+                  ) : !isValidTemperature ? (
+                    <p className="text-[0.95rem] text-yellow-300">Please enter a valid temperature between 30.0 and 45.0 °C.</p>
+                  ) : (
+                    <>
+                      <p className="text-[1rem] font-semibold">Temperature: {temperatureValue.toFixed(1)} °C</p>
+                      <p className="text-[1rem]">Result: <span className="font-bold text-white">{category?.label ?? "Unknown"}</span></p>
+                      <p className="text-[0.9rem] text-cyan-300">Range: {category?.range}</p>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Buttons */}

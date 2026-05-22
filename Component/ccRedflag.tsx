@@ -17,24 +17,25 @@ export default function CcRedflag() {
   };
 
   return (
-    <div className="bg-[#083344] min-h-screen font-sans">
+   <div className="">
 
-      {/* ── NAV BAR ── */}
-      <nav className="w-full bg-[#fefce8] px-8 py-3 flex items-center justify-between shadow-md">
-        <div>
-          <h1 className="text-2xl font-bold text-[#083344]">BICA</h1>
-          <p className="text-xs text-cyan-900">Better Informed Care Access</p>
+      {/* NAV */}
+      <nav className="w-full pl-8 pt-4 pb-4 pr-8 text-cyan-950 bg-yellow-50">
+        <div className="container mx-auto flex items-center justify-between">
+          <div className="flex flex-col">
+            <h1 className="text-2xl font-bold">BICA</h1>
+            <p>Better Informed Care Access</p>
+          </div>
+        <ul className="md:flex space-x-8 hidden text-xl font-semibold">
+            <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
+            <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
+            <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Chief Complaints |</a></li>
+            <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
+          </ul>
         </div>
-        <ul className="flex space-x-6">
-          <li><a href="#" className="text-sm font-semibold text-[#083344] hover:underline text-[#0e4f68] underline">Triage Form |</a></li>
-          <li><a href="#" className="text-sm font-semibold text-[#083344] hover:underline">Vital Signs |</a></li>
-          <li><a href="#" className="text-sm font-semibold text-[#083344] hover:underline">Chief Complaints |</a></li>
-          <li><a href="#" className="text-sm font-semibold text-[#083344] hover:underline">Summary |</a></li>
-        </ul>
       </nav>
-
       {/* ── MAIN LAYOUT WRAPPER ── */}
-      <div className="flex flex-col items-center justify-center py-12 px-4 gap-6">
+      <div className="flex flex-col items-center justify-center py-12 px-4 gap-6 bg-cyan-950">
 
         {/* Header Section */}
         <div className="text-center">
@@ -48,7 +49,7 @@ export default function CcRedflag() {
             <h3 className="text-3xl font-extrabold mb-2">🔴 IMMEDIATE ER REDIRECTION 🔴</h3>
             <p className="text-lg mb-4">Detected: <span className="font-bold underline">{alertData.symptom}</span></p>
             <p className="text-xl font-medium bg-red-950 px-4 py-3 rounded-lg inline-block">
-              Please proceed immediately to the <span className="text-yellow-300 font-black">{alertData.clinic}</span> desk!
+              Please get your ticket and proceed immediately to the ER!
             </p>
             <button 
               onClick={() => setIsEmergency(false)} 
@@ -64,7 +65,7 @@ export default function CcRedflag() {
               
               <h3 className="flex items-center gap-2 text-red-300 text-sm font-bold uppercase tracking-wider mb-5">
                 <svg xmlns="http://www.w3.org/2000/svg" className="w-5 h-5 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                 </svg>
                 Tap immediately if any of these apply to you — you will be directed to the emergency area
               </h3>
@@ -76,31 +77,64 @@ export default function CcRedflag() {
                   onClick={() => handleGoEmergency('Severe chest pain / gasping for air', 'ER / Cardiology')}
                   className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
                 >
-                  <p className="text-red-100 text-base font-bold group-hover:text-white">Severe chest pain / gasping for air</p>
+                  <p className="text-red-100 text-base font-bold group-hover:text-white">Severe chest pain</p>
                 </button>
 
                 {/* Red flag 2 */}
                 <button 
-                  onClick={() => handleGoEmergency('Loss of consciousness / sudden paralysis', 'Neurology ER')}
+                  onClick={() => handleGoEmergency('Severe chest pain / gasping for air', 'ER / Cardiology')}
                   className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
                 >
-                  <p className="text-red-100 text-base font-bold group-hover:text-white">Loss of consciousness / sudden paralysis</p>
+                  <p className="text-red-100 text-base font-bold group-hover:text-white">Gasping for air</p>
                 </button>
 
                 {/* Red flag 3 */}
                 <button 
+                  onClick={() => handleGoEmergency('Loss of consciousness / sudden paralysis', 'Neurology ER')}
+                  className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
+                >
+                  <p className="text-red-100 text-base font-bold group-hover:text-white">Loss of consciousness</p>
+                </button>
+
+                {/* Red flag 4 */}
+                <button 
+                  onClick={() => handleGoEmergency('Loss of consciousness / sudden paralysis', 'Neurology ER')}
+                  className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
+                >
+                  <p className="text-red-100 text-base font-bold group-hover:text-white">Sudden paralysis</p>
+                </button>
+
+                {/* Red flag 5 */}
+                <button 
                   onClick={() => handleGoEmergency('Heavy active bleeding / open fractures', 'Trauma / Surgery ER')}
                   className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
                 >
-                  <p className="text-red-100 text-base font-bold group-hover:text-white">Heavy active bleeding / open fractures</p>
+                  <p className="text-red-100 text-base font-bold group-hover:text-white">Heavy active bleeding</p>
                   </button>
 
-                {/* Red flag 4 */}
+                 {/* Red flag 6 */}
+                <button 
+                  onClick={() => handleGoEmergency('Heavy active bleeding / open fractures', 'Trauma / Surgery ER')}
+                  className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
+                >
+                  <p className="text-red-100 text-base font-bold group-hover:text-white">Open fractures</p>
+                  </button>
+
+
+                {/* Red flag 7 */}
                 <button 
                   onClick={() => handleGoEmergency('Continuous seizures', 'ER / Neurology')}
                   className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
                 >
                   <p className="text-red-100 text-base font-bold group-hover:text-white">Continuous seizures</p>
+                </button>
+
+                {/* Red flag 8 */}
+                <button 
+                  onClick={() => handleGoEmergency('Thesis', 'ER / Neurology')}
+                  className="bg-red-800 border border-red-400 rounded-lg px-4 py-4 text-left hover:bg-red-700 transition-colors cursor-pointer group"
+                >
+                  <p className="text-red-100 text-base font-bold group-hover:text-white">Thesis</p>
                 </button>
 
               </div>

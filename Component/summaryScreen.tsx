@@ -49,7 +49,7 @@ export default function SummaryScreen({
               <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
+              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Summary |</a></li>
             </ul>
             <div className="md:hidden">
               <a className="text-4xl font-semibold" href="#">&#8801;</a>

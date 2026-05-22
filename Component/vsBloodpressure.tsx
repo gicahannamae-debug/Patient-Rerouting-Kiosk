@@ -1,7 +1,28 @@
 'use client'
-import React from "react";
+import React, { useMemo, useState } from "react";
+
+const BP_CATEGORIES = [
+  { label: "Crisis", range: "> 180 / > 120", predicate: (s: number, d: number) => s > 180 || d > 120, color: "bg-red-700" },
+  { label: "High Stage 2", range: "140–180 / 90–120", predicate: (s: number, d: number) => s >= 140 || d >= 90, color: "bg-red-500" },
+  { label: "High Stage 1", range: "130–139 / 80–89", predicate: (s: number, d: number) => (s >= 130 && s <= 139) || (d >= 80 && d <= 89), color: "bg-orange-400" },
+  { label: "Elevated", range: "120–129 / < 80", predicate: (s: number, d: number) => s >= 120 && s <= 129 && d < 80, color: "bg-yellow-400" },
+  { label: "Normal", range: "< 120 / < 80", predicate: (s: number, d: number) => s < 120 && d < 80, color: "bg-green-400" },
+];
 
 export default function vsBloodpressure() {
+  const [systolic, setSystolic] = useState("");
+  const [diastolic, setDiastolic] = useState("");
+
+  const systolicValue = parseFloat(systolic);
+  const diastolicValue = parseFloat(diastolic);
+  const isValidSystolic = !Number.isNaN(systolicValue) && systolicValue >= 60 && systolicValue <= 300;
+  const isValidDiastolic = !Number.isNaN(diastolicValue) && diastolicValue >= 40 && diastolicValue <= 200;
+
+  const bpCategory = useMemo(() => {
+    if (!isValidSystolic || !isValidDiastolic) return null;
+    return BP_CATEGORIES.find((item) => item.predicate(systolicValue, diastolicValue)) ?? null;
+  }, [systolicValue, diastolicValue, isValidSystolic, isValidDiastolic]);
+
   return (
 
     <div className="">
@@ -18,7 +39,7 @@ export default function vsBloodpressure() {
           <div className="pr-[2rem]">
             <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
               <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
+              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline ">Vital Signs |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
               <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
             </ul>
@@ -108,22 +129,26 @@ export default function vsBloodpressure() {
                 />
               </section>
 
-              {/* BP Classification reference */}
-              <div className="flex flex-col gap-[0.3rem] bg-cyan-950 rounded-lg px-[0.9rem] py-[0.7rem]">
-                <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider mb-[0.2rem]">BP Classification</p>
-                {[
-                  { label: "Normal",        range: "< 120 / < 80",    dot: "bg-green-400" },
-                  { label: "Elevated",      range: "120–129 / < 80",  dot: "bg-yellow-400" },
-                  { label: "High Stage 1",  range: "130–139 / 80–89", dot: "bg-orange-400" },
-                  { label: "High Stage 2",  range: "≥ 140 / ≥ 90",   dot: "bg-red-500" },
-                  { label: "Crisis",        range: "> 180 / > 120",   dot: "bg-red-700" },
-                ].map((item) => (
-                  <div key={item.label} className="flex flex-row items-center gap-[0.5rem]">
-                    <div className={`w-[0.6rem] h-[0.6rem] rounded-full flex-shrink-0 ${item.dot}`} />
-                    <p className="text-[0.78rem] text-white">{item.label}</p>
-                    <p className="text-[0.78rem] text-cyan-400 ml-auto">{item.range}</p>
-                  </div>
-                ))}
+              {/* Patient Blood Pressure Results */}
+              <div className="flex flex-col gap-[0.75rem] bg-cyan-950 rounded-lg px-[0.9rem] py-[0.9rem]">
+                <div className="text-center">
+                  <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider">Patient Blood Pressure Results</p>
+                </div>
+
+                <div className="rounded-lg border border-cyan-600 bg-cyan-900 p-[1rem] text-white">
+                  {systolic === "" && diastolic === "" ? (
+                    <p className="text-[0.95rem] text-cyan-300">Enter systolic and diastolic values to see the result here.</p>
+                  ) : !isValidSystolic || !isValidDiastolic ? (
+                    <p className="text-[0.95rem] text-yellow-300">Please enter valid values: systolic 60–300 and diastolic 40–200 mmHg.</p>
+                  ) : (
+                    <>
+                      <p className="text-[0.95rem] text-cyan-300">Systolic: <span className="font-semibold text-white">{systolicValue.toFixed(0)} mmHg</span></p>
+                      <p className="text-[0.95rem]">Diastolic: <span className="font-semibold text-white">{diastolicValue.toFixed(0)} mmHg</span></p>
+                      <p className="text-[0.95rem] mt-[0.5rem]">Result: <span className="font-bold text-white">{bpCategory?.label ?? "Unknown"}</span></p>
+                      <p className="text-[0.95rem] text-cyan-300">Range: {bpCategory?.range}</p>
+                    </>
+                  )}
+                </div>
               </div>
 
               {/* Buttons */}
