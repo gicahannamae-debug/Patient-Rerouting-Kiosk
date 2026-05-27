@@ -8,8 +8,9 @@ import HospitalNumber from "@/Component/hospitalNumber";
 import VsTemperature from "@/Component/vsTemperature";
 import VsBloodpressure from "@/Component/vsBloodpressure";
 import VsOximeter from "@/Component/vsOximeter";
-import CcMain from "@/Component/ccMain"
+import CcMain from "@/Component/ccMain";
 import CcRedflag from "@/Component/ccRedflag";
+import PrimaryClinics from "@/Component/primaryClinics";
 import CcSurgery from "@/Component/ccSurgery";
 import CcDental from "@/Component/ccDental";
 import CcEnt from "@/Component/ccEnt";
@@ -66,6 +67,7 @@ export default function Home(){
       <VsOximeter />
       <CcRedflag />
       <CcMain />
+      <PrimaryClinics />
       <CcDental />
       <CcEnt />
       <CcFamilymedicine />

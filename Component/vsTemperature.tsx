@@ -109,7 +109,7 @@ export default function VsTemperature() {
                   placeholder="e.g. 36.8"
                   min="30"
                   max="45"
-                  step="0.1"
+                  step="0.1" 
                   value={temperature}
                   onChange={(event) => setTemperature(event.target.value)}
                   className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"

@@ -22,7 +22,7 @@ export default function CcNephrology() {
   };
 
   return (
-    <div className="">
+    <div className="hidden">
 
       {/* NAV */}
       <nav className="w-full pl-8 pt-4 pb-4 pr-8 text-cyan-950 bg-yellow-50">

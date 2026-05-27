@@ -20,7 +20,7 @@ const BicaTriage = () => {
   ];
 
   return (
-    <div className="bg-cyan-950 min-h-screen flex flex-col items-center py-[3rem]">
+    <div className="bg-cyan-950 min-h-screen flex flex-col items-center py-[3rem] hidden">
       {/* Navigation */}
       <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-orange-50 mb-12">
         <div className="container mx-auto flex items-center justify-between">
