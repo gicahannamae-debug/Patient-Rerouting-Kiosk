@@ -85,12 +85,6 @@ export default function vsBloodpressure() {
                 <p className="text-[1.3rem] text-white leading-snug">{step}</p>
               </div>
             ))}
-
-            {/* Warning note */}
-            <div className="bg-yellow-100 border border-yellow-400 rounded-md px-[1rem] py-[0.5rem] text-[0.82rem] text-yellow-900 mt-[0.5rem]">
-              <strong>Reminder:</strong> Avoid caffeine, smoking, or exercise at least 30 minutes before taking your blood pressure.
-            </div>
-
           </div>
 
           {/* ── RIGHT: Input Form ── */}
@@ -101,7 +95,7 @@ export default function vsBloodpressure() {
               <p className="text-[0.9rem] text-cyan-300">Enter the values shown on the BP machine.</p>
             </div>
 
-            <form className="flex flex-col gap-[1rem]">
+            <form className="flex flex-col gap-[1rem] bg-cyan-950 rounded-lg p-[1rem]">
 
               <section className="flex flex-col gap-[0.25rem]">
                 <label className="text-[1.1rem] font-semibold text-white">
@@ -130,7 +124,7 @@ export default function vsBloodpressure() {
               </section>
 
               {/* Patient Blood Pressure Results */}
-              <div className="flex flex-col gap-[0.75rem] bg-cyan-950 rounded-lg px-[0.9rem] py-[0.9rem]">
+              <div className="flex flex-col gap-[0.75rem]">
                 <div className="text-center">
                   <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider">Patient Blood Pressure Results</p>
                 </div>
@@ -153,7 +147,6 @@ export default function vsBloodpressure() {
 
               {/* Buttons */}
               <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">
-
                 <button
                   type="button"
                   className="text-[1rem] font-semibold bg-transparent text-orange-50 border border-orange-100 px-[1.5rem] py-[0.5rem] rounded-md hover:bg-cyan-800 cursor-pointer"
@@ -167,14 +160,10 @@ export default function vsBloodpressure() {
                 >
                   Proceed
                 </button>
-
               </div>
-
             </form>
           </div>
-
         </div>
-
       </div>
     </div>
   );

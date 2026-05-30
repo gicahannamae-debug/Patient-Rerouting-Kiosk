@@ -47,7 +47,7 @@ export default function hospitalNumber() {
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Hospital Number (HN) <span className="text-red-400">*</span>
+                Hospital Number (HN) 
               </label>
               <input
                 type="text"
@@ -74,7 +74,7 @@ export default function hospitalNumber() {
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Last Name <span className="text-red-400">*</span>
+                Last Name 
               </label>
               <input
                 type="text"
@@ -85,7 +85,7 @@ export default function hospitalNumber() {
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                First Name <span className="text-red-400">*</span>
+                First Name 
               </label>
               <input
                 type="text"
@@ -110,7 +110,7 @@ export default function hospitalNumber() {
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Birthdate <span className="text-red-400">*</span>
+                Birthdate 
               </label>
               <input
                 type="date"
@@ -121,7 +121,7 @@ export default function hospitalNumber() {
 
             <section className="flex flex-col gap-[0.25rem] w-[8rem]">
               <label className="text-[1.1rem] font-semibold text-white">
-                Age <span className="text-red-400">*</span>
+                Age 
               </label>
               <input
                 type="number"
@@ -134,7 +134,7 @@ export default function hospitalNumber() {
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Sex <span className="text-red-400">*</span>
+                Sex 
               </label>
               <select className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300">
                 <option value="">— select —</option>
@@ -150,7 +150,7 @@ export default function hospitalNumber() {
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Registered Contact Number <span className="text-red-400">*</span>
+                Registered Contact Number
               </label>
               <input
                 type="tel"
@@ -162,7 +162,7 @@ export default function hospitalNumber() {
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Purpose of Visit <span className="text-red-400">*</span>
+                Purpose of Visit 
               </label>
               <select className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300">
                 <option value="">— select —</option>
@@ -175,12 +175,6 @@ export default function hospitalNumber() {
               </select>
             </section>
 
-          </div>
-
-          {/* ── NOTICE ── */}
-          <div className="bg-orange-100 border border-orange-300 rounded-md px-[1rem] py-[0.6rem] text-[0.85rem] text-orange-900">
-            <strong>Note:</strong> Fields marked <span className="text-red-500 font-bold">*</span> are required.
-            If your record cannot be found, please proceed to the <strong>Medical Records window</strong> for manual assistance.
           </div>
 
           {/* ── BUTTONS — centered ── */}

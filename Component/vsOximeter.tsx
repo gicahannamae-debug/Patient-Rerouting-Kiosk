@@ -95,11 +95,6 @@ export default function vsOximeter() {
               </div>
             ))}
 
-            {/* Reminder note */}
-            <div className="bg-yellow-100 border border-yellow-400 rounded-md px-[1rem] py-[0.5rem] text-[0.82rem] text-yellow-900 mt-[0.5rem]">
-              <strong>Reminder:</strong> Cold hands, nail polish, or artificial nails may affect the accuracy of the reading. Warm your hands first if needed.
-            </div>
-
           </div>
 
           {/* ── RIGHT: Input Form ── */}

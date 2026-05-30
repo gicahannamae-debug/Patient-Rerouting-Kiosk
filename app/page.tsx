@@ -8,22 +8,10 @@ import HospitalNumber from "@/Component/hospitalNumber";
 import VsTemperature from "@/Component/vsTemperature";
 import VsBloodpressure from "@/Component/vsBloodpressure";
 import VsOximeter from "@/Component/vsOximeter";
-import CcMain from "@/Component/ccMain";
 import CcRedflag from "@/Component/ccRedflag";
 import PrimaryClinics from "@/Component/primaryClinics";
-import CcSurgery from "@/Component/ccSurgery";
-import CcDental from "@/Component/ccDental";
-import CcEnt from "@/Component/ccEnt";
-import CcFamilymedicine from "@/Component/ccFamilymedicine";
-import CcNephrology from "@/Component/ccNephrology";
-import CcObgyn from "@/Component/ccObgyn";
-import CcOncology from "@/Component/ccOncology";
-import CcPediatrics from "@/Component/ccPediatrics";
-import CcPsychiatry from "@/Component/ccPsychiatry";
-import CcPulmonary from "@/Component/ccPulmonary";
-import CcOpthalmology from "@/Component/ccOpthalmology";
-import CcInputconcern from "@/Component/ccInputconcern"
-import SummaryScreen, { SummaryScreenProps } from "@/Component/summaryScreen";
+import { SummaryScreenProps } from "@/Component/summaryTypes";
+import SummaryScreen from "@/Component/summaryScreen";
 
 export default function Home(){
   const [summary] = useState<SummaryScreenProps>({
@@ -38,6 +26,13 @@ export default function Home(){
     complaints: "Eye Irritation",
     clinic: "General OPD",
     queueCode: "R-ENT-007",
+    patientStatus: "referred",
+    referralFrom: "Bukidnon Provincial Hospital",
+    referralDoctor: "Dr. Juan Dela Cruz",
+    referralDate: "05/16/2026",
+    referralPurpose: "Specialist consultation",
+    referralFormNo: "RF-2026-00123",
+    referralDiagnosis: "Suspected acute glaucoma",
   });
 
   const [isPatientCat, setIsPatientCat] = useState<boolean>(false);
@@ -66,20 +61,7 @@ export default function Home(){
       <VsBloodpressure />
       <VsOximeter />
       <CcRedflag />
-      <CcMain />
       <PrimaryClinics />
-      <CcDental />
-      <CcEnt />
-      <CcFamilymedicine />
-      <CcNephrology />
-      <CcObgyn />
-      <CcOncology />
-      <CcPediatrics />
-      <CcPsychiatry />
-      <CcPulmonary />
-      <CcOpthalmology />  
-      <CcSurgery />  
-      <CcInputconcern/>
       <SummaryScreen {...summary} />
     </div>
   );

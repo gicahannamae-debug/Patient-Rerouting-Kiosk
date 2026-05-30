@@ -557,13 +557,6 @@ function SummaryPanel({
           </div>
         )}
 
-        {sub && (
-          <div className="border-t border-cyan-800 pt-2">
-            <p className="text-xs text-cyan-500 uppercase font-semibold">Target Clinic</p>
-            <p className="text-sm font-bold text-emerald-300 mt-0.5">{sub.clinic}</p>
-          </div>
-        )}
-
         {yesCount > 0 && (
           <div className="border-t border-cyan-800 pt-2">
             <p className="text-xs text-cyan-500 uppercase font-semibold">YES answers</p>
@@ -572,12 +565,6 @@ function SummaryPanel({
         )}
       </div>
 
-      {/* System value — hidden from patient, visible here for dev reference */}
-      {sub && (
-        <div className="bg-cyan-950 border border-dashed border-cyan-800 rounded-lg px-3 py-2">
-          <p className="text-xs text-cyan-600 font-mono">SYS: {sub.systemValue}</p>
-        </div>
-      )}
     </div>
   );
 }
@@ -589,20 +576,18 @@ function SummaryPanel({
 function RedFlagOverlay({ onReset }: { onReset: () => void }) {
   return (
     <div className="fixed inset-0 bg-red-950 bg-opacity-95 flex items-center justify-center z-50">
-      <div className="max-w-lg w-full mx-4 bg-red-900 border-4 border-red-400 rounded-2xl p-10 text-center animate-pulse">
-        <p className="text-6xl mb-4">🚨</p>
-        <h2 className="text-3xl font-black text-white mb-3">PROCEED TO EMERGENCY</h2>
-        <p className="text-red-200 text-lg mb-6">
-          One of your answers indicates you may need immediate medical attention.
-          Please inform clinic staff or proceed to the Emergency Room now.
+      <div className="max-w-3xl w-full mx-4 bg-red-600 border-4 border-white text-white rounded-xl p-8 text-center shadow-2xl animate-pulse">
+        <h3 className="text-3xl font-extrabold mb-2">🔴 IMMEDIATE ER REDIRECTION 🔴</h3>
+        <p className="text-lg mb-4">
+          One of your answers indicates a potential emergency condition.
         </p>
-        <div className="bg-red-950 rounded-xl px-6 py-4 mb-6">
-          <p className="text-yellow-300 font-bold text-lg">→ Go to the ER desk immediately</p>
-        </div>
+        <p className="text-xl font-medium bg-red-950 px-4 py-3 rounded-lg inline-block">
+          Please get your ticket and proceed immediately to the Emergency Room!
+        </p>
         <button
           type="button"
           onClick={onReset}
-          className="text-xs text-red-400 hover:underline cursor-pointer"
+          className="block mx-auto mt-6 text-xs text-red-200 hover:underline opacity-70"
         >
           Cancel / Reset kiosk
         </button>
@@ -679,7 +664,6 @@ function Screen4({
             <p className="text-base font-bold text-white group-hover:text-orange-100 leading-snug">
               {sc.label}
             </p>
-            <p className="text-xs text-emerald-400 mt-2 font-semibold">→ {sc.clinic}</p>
           </button>
         ))}
       </div>
@@ -718,8 +702,7 @@ function Screen5({
         </p>
         <h2 className="text-3xl font-bold text-white">Answer these questions</h2>
         <p className="text-cyan-300 text-base mt-1">
-          Tap <span className="font-bold text-emerald-400">YES</span> or{" "}
-          <span className="font-bold text-cyan-400">NO</span> for each item. Be as honest as you can.
+          Check the box for <span className="font-bold text-emerald-400">YES</span>, leave it unchecked for <span className="font-bold text-cyan-400">NO</span>.
         </p>
       </div>
 
@@ -753,28 +736,16 @@ function Screen5({
                 </div>
               </div>
 
-              {/* YES / NO buttons */}
-              <div className="flex gap-2 flex-shrink-0">
-                <button
-                  type="button"
-                  onClick={() => onAnswer(q.id, true)}
-                  className={`px-5 py-2.5 rounded-lg text-sm font-black border-2 cursor-pointer transition-all
-                    ${isYes
-                      ? "bg-emerald-500 border-emerald-400 text-white"
-                      : "bg-transparent border-emerald-800 text-emerald-500 hover:border-emerald-500"}`}
-                >
-                  YES
-                </button>
-                <button
-                  type="button"
-                  onClick={() => onAnswer(q.id, false)}
-                  className={`px-5 py-2.5 rounded-lg text-sm font-black border-2 cursor-pointer transition-all
-                    ${isNo
-                      ? "bg-cyan-700 border-cyan-400 text-white"
-                      : "bg-transparent border-cyan-800 text-cyan-500 hover:border-cyan-500"}`}
-                >
-                  NO
-                </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <label className="inline-flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={isYes}
+                    onChange={(event) => onAnswer(q.id, event.target.checked)}
+                    className="w-5 h-5 rounded border-cyan-700 text-emerald-500 focus:ring-2 focus:ring-emerald-400"
+                  />
+                  <span className="text-sm font-semibold text-white">Yes</span>
+                </label>
               </div>
             </div>
           );
@@ -858,15 +829,12 @@ export default function primaryClinics () {
       category_id:    selectedCategory?.id,
       sub_id:         selectedSub?.id,
       system_value:   selectedSub?.systemValue,
-      target_clinic:  selectedSub?.clinic,
       answers,
     };
     console.log("BICA Payload → ML Model:", JSON.stringify(payload, null, 2));
   };
 
-  const allAnswered =
-    selectedSub !== null &&
-    Object.keys(answers).length === selectedSub.questions.length;
+  const yesCount = Object.values(answers).filter(Boolean).length;
 
   // ── Render ────────────────────────────────────────────────────────────────
 
@@ -884,9 +852,6 @@ export default function primaryClinics () {
             Chief Complaints
           </p>
           <h1 className="text-4xl font-bold text-white">Tell us about your concern</h1>
-          <p className="text-base font-serif text-cyan-300 mt-1">
-            Tap the buttons — no typing needed.
-          </p>
         </div>
 
         {/* Breadcrumb */}
@@ -913,14 +878,14 @@ export default function primaryClinics () {
             <SummaryPanel category={selectedCategory} sub={selectedSub} answers={answers} />
 
             <div className="flex flex-col gap-2 mt-4">
-              {/* Proceed — only on questions step when all answered */}
+                {/* Proceed — available on the questions step, even if not all boxes are checked */}
               {step === "questions" && (
                 <button
                   type="button"
-                  disabled={!allAnswered}
+                  disabled={yesCount < 2}
                   onClick={handleProceed}
                   className={`text-base font-bold px-5 py-3 rounded-xl transition-all
-                    ${allAnswered
+                    ${yesCount >= 2
                       ? "bg-orange-50 text-cyan-950 hover:bg-orange-100 cursor-pointer"
                       : "bg-cyan-800 text-cyan-500 cursor-not-allowed"}`}
                 >

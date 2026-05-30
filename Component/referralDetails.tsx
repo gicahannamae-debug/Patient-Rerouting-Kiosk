@@ -152,11 +152,6 @@ export default function referralDetails() {
 
           </div>
 
-          {/* ── NOTICE ── */}
-          <div className="bg-yellow-100 border border-yellow-400 rounded-md px-[1rem] py-[0.6rem] text-[0.85rem] text-yellow-900">
-            <strong>Note:</strong> Please present the physical referral slip to the triage nurse after submitting this form.
-          </div>
-
           {/* ── BUTTONS — centered, not full width ── */}
           <div className="flex justify-center gap-[1rem] pt-[0.5rem]">
 

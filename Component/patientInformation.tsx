@@ -130,14 +130,23 @@ export default function patientInformation() {
 
           </div>
 
-          {/* ── PROCEED BUTTON — centered, not full width ── */}
-          <div className="flex justify-center pt-[0.5rem]">
+            {/* ── BUTTONS — centered, not full width ── */}
+          <div className="flex justify-center gap-[1rem] pt-[0.5rem]">
+
+            <button
+              type="button"
+              className="text-[1.1rem] font-semibold bg-transparent text-yellow-50 border border-yellow-100 px-[2rem] py-[0.6rem] rounded-md hover:bg-cyan-800 cursor-pointer"
+            >
+              ← Back
+            </button>
+
             <button
               type="submit"
-              className="text-[1.3rem] font-semibold bg-orange-50 text-cyan-950 px-[3rem] py-[0.6rem] rounded-md hover:bg-orange-100 cursor-pointer"
+              className="text-[1.3rem] font-semibold bg-yellow-50 text-cyan-950 px-[3rem] py-[0.6rem] rounded-md hover:bg-yellow-100 cursor-pointer"
             >
               Proceed
             </button>
+
           </div>
 
         </form>
