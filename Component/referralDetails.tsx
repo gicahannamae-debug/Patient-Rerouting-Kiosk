@@ -1,7 +1,12 @@
 'use client'
 import React from "react";
 
-export default function referralDetails() {
+interface ReferralDetailsProps {
+  onBack?: () => void;
+  onProceed?: () => void;
+}
+
+export default function referralDetails({ onBack, onProceed }: ReferralDetailsProps) {
   return (
 
     <div className="">
@@ -40,8 +45,13 @@ export default function referralDetails() {
         </div>
 
         {/* ── FORM CARD ── */}
-        <form className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]">
-
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              onProceed?.();
+            }}
+            className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]"
+          >
           {/* ── ROW 1: Referring Facility | Facility Type ── */}
           <div className="flex flex-row justify-evenly gap-[1rem]">
 
@@ -157,6 +167,7 @@ export default function referralDetails() {
 
             <button
               type="button"
+              onClick={() => onBack?.()}
               className="text-[1.1rem] font-semibold bg-transparent text-yellow-50 border border-yellow-100 px-[2rem] py-[0.6rem] rounded-md hover:bg-cyan-800 cursor-pointer"
             >
               ← Back

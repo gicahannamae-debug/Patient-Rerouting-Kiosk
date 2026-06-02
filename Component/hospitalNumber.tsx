@@ -1,7 +1,12 @@
 'use client'
 import React from "react";
 
-export default function hospitalNumber() {
+interface HospitalNumberProps {
+  onBack?: () => void;
+  onProceed?: () => void;
+}
+
+export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProps) {
   return (
 
     <div className="">
@@ -40,8 +45,13 @@ export default function hospitalNumber() {
         </div>
 
         {/* ── FORM CARD ── */}
-        <form className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]">
-
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              onProceed?.();
+            }}
+            className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]"
+          >
           {/* ── ROW 1: Hospital Number | PhilHealth ID ── */}
           <div className="flex flex-row justify-evenly gap-[1rem]">
 
@@ -182,6 +192,7 @@ export default function hospitalNumber() {
 
             <button
               type="button"
+              onClick={() => onBack?.()}
               className="text-[1.1rem] font-semibold bg-transparent text-orange-50 border border-orange-100 px-[2rem] py-[0.6rem] rounded-md hover:bg-cyan-800 cursor-pointer"
             >
               ← Back

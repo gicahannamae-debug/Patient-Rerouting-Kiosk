@@ -1,7 +1,12 @@
 'use client';
 import React, { useState } from "react";
 
-export default function CcRedflag() {
+interface CcRedflagProps {
+  onBack?: () => void;
+  onProceed?: () => void;
+}
+
+export default function CcRedflag({ onBack, onProceed }: CcRedflagProps) {
   const [isEmergency, setIsEmergency] = useState(false);
   const [alertData, setAlertData] = useState({ symptom: "", clinic: "" });
 
@@ -134,12 +139,21 @@ export default function CcRedflag() {
             </div>
 
             {/* Safe Proceed */}
-            <div className="w-full">
+            <div className="w-full flex flex-col gap-4">
+              {onBack && (
+                <button
+                  onClick={() => onBack?.()}
+                  className="w-full text-center bg-transparent border border-white/30 text-white text-base font-semibold py-4 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
+                >
+                  ← Back to Vital Signs
+                </button>
+              )}
+
               <button
-                onClick={() => console.log("Moving cleanly to Chief Complaints view step...")}
+                onClick={() => onProceed?.()}
                 className="w-full text-center bg-[#083344] border-2 border-[#fefce8] text-white text-2xl font-bold py-5 rounded-xl hover:bg-[#0e4f68] transition-colors cursor-pointer block"
               >
-                None of these apply to me — proceed to symptom check →
+                None of these apply to me — proceed to summary →
               </button>
             </div>
           </>

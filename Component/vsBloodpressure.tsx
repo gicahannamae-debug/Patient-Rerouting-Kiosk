@@ -2,6 +2,8 @@
 import React, { useMemo, useState } from "react";
 
 const BP_CATEGORIES = [
+  { label: "🔴 CRITICAL LOW", range: "< 90 / < 60", predicate: (s: number, d: number) => s < 90 && d < 60, color: "bg-red-600" },
+  { label: "🔴 CRITICAL HIGH", range: "> 140 / > 90", predicate: (s: number, d: number) => s > 140 || d > 90, color: "bg-red-600" },
   { label: "Crisis", range: "> 180 / > 120", predicate: (s: number, d: number) => s > 180 || d > 120, color: "bg-red-700" },
   { label: "High Stage 2", range: "140–180 / 90–120", predicate: (s: number, d: number) => s >= 140 || d >= 90, color: "bg-red-500" },
   { label: "High Stage 1", range: "130–139 / 80–89", predicate: (s: number, d: number) => (s >= 130 && s <= 139) || (d >= 80 && d <= 89), color: "bg-orange-400" },
@@ -9,9 +11,15 @@ const BP_CATEGORIES = [
   { label: "Normal", range: "< 120 / < 80", predicate: (s: number, d: number) => s < 120 && d < 80, color: "bg-green-400" },
 ];
 
-export default function vsBloodpressure() {
+interface VsBloodpressureProps {
+  onBack?: () => void;
+  onProceed?: () => void;
+}
+
+export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressureProps) {
   const [systolic, setSystolic] = useState("");
   const [diastolic, setDiastolic] = useState("");
+  const [alertTriggered, setAlertTriggered] = useState(false);
 
   const systolicValue = parseFloat(systolic);
   const diastolicValue = parseFloat(diastolic);
@@ -23,9 +31,39 @@ export default function vsBloodpressure() {
     return BP_CATEGORIES.find((item) => item.predicate(systolicValue, diastolicValue)) ?? null;
   }, [systolicValue, diastolicValue, isValidSystolic, isValidDiastolic]);
 
+  const criticalBpMessage = useMemo(() => {
+    if (!bpCategory) return null;
+    if (bpCategory.label === "🔴 CRITICAL LOW") return "Blood pressure is critically low. Please proceed to emergency care immediately.";
+    if (bpCategory.label === "🔴 CRITICAL HIGH" || bpCategory.label === "High Stage 2" || bpCategory.label === "Crisis") return "Blood pressure is critically high. Please proceed to emergency care immediately.";
+    return null;
+  }, [bpCategory]);
+
+  const showCriticalBpOverlay = alertTriggered && !!criticalBpMessage;
+
   return (
 
     <div className="">
+      {showCriticalBpOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950 bg-opacity-95 p-6">
+          <div className="w-full max-w-4xl bg-red-600 border-4 border-white rounded-xl p-10 text-center shadow-2xl animate-pulse">
+            <h3 className="text-5xl font-extrabold mb-4">IMMEDIATE ER REDIRECTION</h3>
+            <p className="text-2xl mb-5">{criticalBpMessage}</p>
+            <p className="text-3xl font-medium bg-red-950 px-6 py-5 rounded-lg inline-block">
+              Please get your ticket and proceed immediately to the ER!
+            </p>
+            <button
+              onClick={() => {
+                setSystolic("");
+                setDiastolic("");
+                setAlertTriggered(false);
+              }}
+              className="block mx-auto mt-8 text-base text-red-200 hover:underline opacity-70"
+            >
+              Cancel / Reset Kiosk
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── NAV ── */}
       <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-yellow-50">
@@ -95,7 +133,16 @@ export default function vsBloodpressure() {
               <p className="text-[0.9rem] text-cyan-300">Enter the values shown on the BP machine.</p>
             </div>
 
-            <form className="flex flex-col gap-[1rem] bg-cyan-950 rounded-lg p-[1rem]">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setAlertTriggered(true);
+                if (!criticalBpMessage) {
+                  onProceed?.();
+                }
+              }}
+              className="flex flex-col gap-[1rem] bg-cyan-950 rounded-lg p-[1rem]"
+            >
 
               <section className="flex flex-col gap-[0.25rem]">
                 <label className="text-[1.1rem] font-semibold text-white">
@@ -106,6 +153,8 @@ export default function vsBloodpressure() {
                   placeholder="e.g. 120"
                   min="60"
                   max="300"
+                  value={systolic}
+                  onChange={(e) => setSystolic(e.target.value)}
                   className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
                 />
               </section>
@@ -119,6 +168,8 @@ export default function vsBloodpressure() {
                   placeholder="e.g. 80"
                   min="40"
                   max="200"
+                  value={diastolic}
+                  onChange={(e) => setDiastolic(e.target.value)}
                   className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
                 />
               </section>
@@ -149,6 +200,7 @@ export default function vsBloodpressure() {
               <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">
                 <button
                   type="button"
+                  onClick={() => onBack?.()}
                   className="text-[1rem] font-semibold bg-transparent text-orange-50 border border-orange-100 px-[1.5rem] py-[0.5rem] rounded-md hover:bg-cyan-800 cursor-pointer"
                 >
                   ← Back

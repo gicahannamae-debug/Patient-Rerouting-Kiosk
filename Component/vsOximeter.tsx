@@ -5,18 +5,26 @@ const SPO2_CATEGORIES = [
   { label: "Normal", range: "95% – 100%", min: 95, max: 101, color: "bg-green-400" },
   { label: "Acceptable", range: "91% – 94%", min: 91, max: 95, color: "bg-yellow-400" },
   { label: "Low", range: "86% – 90%", min: 86, max: 91, color: "bg-orange-400" },
-  { label: "Critical", range: "≤ 85%", min: 0, max: 86, color: "bg-red-500" },
+  { label: "🔴 CRITICAL", range: "< 90%", min: 0, max: 90, color: "bg-red-600" },
 ];
 
 const HR_CATEGORIES = [
-  { label: "Bradycardia", range: "< 60 bpm", min: 0, max: 60, color: "bg-blue-400" },
+  { label: "🔴 CRITICAL LOW", range: "< 50 bpm", min: 0, max: 50, color: "bg-red-600" },
+  { label: "Bradycardia", range: "50 – 59 bpm", min: 50, max: 60, color: "bg-blue-400" },
   { label: "Normal", range: "60 – 100 bpm", min: 60, max: 101, color: "bg-green-400" },
-  { label: "Tachycardia", range: "> 100 bpm", min: 101, max: 1000, color: "bg-orange-400" },
+  { label: "Tachycardia", range: "101 – 120 bpm", min: 101, max: 120, color: "bg-orange-400" },
+  { label: "🔴 CRITICAL HIGH", range: "> 120 bpm", min: 120, max: 1000, color: "bg-red-600" },
 ];
 
-export default function vsOximeter() {
+interface VsOximeterProps {
+  onBack?: () => void;
+  onProceed?: () => void;
+}
+
+export default function vsOximeter({ onBack, onProceed }: VsOximeterProps) {
   const [spo2, setSpo2] = useState("");
   const [heartRate, setHeartRate] = useState("");
+  const [alertTriggered, setAlertTriggered] = useState(false);
 
   const spo2Value = parseFloat(spo2);
   const heartRateValue = parseFloat(heartRate);
@@ -33,9 +41,40 @@ export default function vsOximeter() {
     return HR_CATEGORIES.find((item) => heartRateValue >= item.min && heartRateValue < item.max) ?? null;
   }, [heartRateValue, isValidHeartRate]);
 
+  const criticalOximeterMessage = useMemo(() => {
+    const messages: string[] = [];
+    if (spo2Category?.label === "🔴 CRITICAL") messages.push("SpO₂ is critically low.");
+    if (heartRateCategory?.label === "🔴 CRITICAL LOW") messages.push("Heart rate is critically low.");
+    if (heartRateCategory?.label === "🔴 CRITICAL HIGH") messages.push("Heart rate is critically high.");
+    return messages.length ? `${messages.join(" ")} Please proceed to emergency care immediately.` : null;
+  }, [spo2Category, heartRateCategory]);
+
+  const showCriticalOximeterOverlay = alertTriggered && !!criticalOximeterMessage;
+
   return (
 
     <div className="">
+      {showCriticalOximeterOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950 bg-opacity-95 p-6">
+          <div className="w-full max-w-4xl bg-red-600 border-4 border-white rounded-xl p-10 text-center shadow-2xl animate-pulse">
+            <h3 className="text-5xl font-extrabold mb-4">IMMEDIATE ER REDIRECTION</h3>
+            <p className="text-2xl mb-5">{criticalOximeterMessage}</p>
+            <p className="text-3xl font-medium bg-red-950 px-6 py-5 rounded-lg inline-block">
+              Please get your ticket and proceed immediately to the ER!
+            </p>
+            <button
+              onClick={() => {
+                setSpo2("");
+                setHeartRate("");
+                setAlertTriggered(false);
+              }}
+              className="block mx-auto mt-8 text-base text-red-200 hover:underline opacity-70"
+            >
+              Cancel / Reset Kiosk
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* ── NAV ── */}
       <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-yellow-50">
@@ -105,7 +144,16 @@ export default function vsOximeter() {
               <p className="text-[0.9rem] text-cyan-300">Enter the values shown on the oximeter.</p>
             </div>
 
-            <form className="flex flex-col gap-[1rem]">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setAlertTriggered(true);
+                if (!criticalOximeterMessage) {
+                  onProceed?.();
+                }
+              }}
+              className="flex flex-col gap-[1rem]"
+            >
 
               <section className="flex flex-col gap-[0.25rem]">
                 <label className="text-[1.1rem] font-semibold text-white">
@@ -116,6 +164,8 @@ export default function vsOximeter() {
                   placeholder="e.g. 98"
                   min="50"
                   max="100"
+                  value={spo2}
+                  onChange={(e) => setSpo2(e.target.value)}
                   className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
                 />
               </section>
@@ -129,6 +179,8 @@ export default function vsOximeter() {
                   placeholder="e.g. 72"
                   min="30"
                   max="250"
+                  value={heartRate}
+                  onChange={(e) => setHeartRate(e.target.value)}
                   className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
                 />
               </section>
@@ -160,6 +212,7 @@ export default function vsOximeter() {
 
                 <button
                   type="button"
+                  onClick={() => onBack?.()}
                   className="text-[1rem] font-semibold bg-transparent text-orange-50 border border-orange-100 px-[1.5rem] py-[0.5rem] rounded-md hover:bg-cyan-800 cursor-pointer"
                 >
                   ← Back

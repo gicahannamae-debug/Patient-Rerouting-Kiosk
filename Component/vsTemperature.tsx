@@ -2,16 +2,22 @@
 import React, { useMemo, useState } from "react";
 
 const TEMPERATURE_CATEGORIES = [
-  { label: "Hypothermia", range: "< 35.0 °C", min: Number.NEGATIVE_INFINITY, max: 35.0 },
-  { label: "Normal", range: "35.0 – 37.2 °C", min: 35.0, max: 37.3 },
-  { label: "Low-grade Fever", range: "37.3 – 38.0 °C", min: 37.3, max: 38.1 },
-  { label: "Moderate Fever", range: "38.1 – 39.0 °C", min: 38.1, max: 39.1 },
-  { label: "High Fever", range: "39.1 – 40.0 °C", min: 39.1, max: 40.1 },
-  { label: "Hyperpyrexia", range: "> 40.0 °C", min: 40.1, max: Number.POSITIVE_INFINITY },
+  { label: "🔴 CRITICAL LOW", range: "< 35.0 °C", min: Number.NEGATIVE_INFINITY, max: 35.0, color: "bg-red-600" },
+  { label: "Hypothermia", range: "35.0 – 36.9 °C", min: 35.0, max: 37.0, color: "bg-blue-400" },
+  { label: "Normal", range: "37.0 – 37.2 °C", min: 37.0, max: 37.3, color: "bg-green-400" },
+  { label: "Low-grade Fever", range: "37.3 – 38.0 °C", min: 37.3, max: 38.1, color: "bg-yellow-400" },
+  { label: "Moderate Fever", range: "38.1 – 39.0 °C", min: 38.1, max: 39.1, color: "bg-orange-400" },
+  { label: "🔴 CRITICAL HIGH", range: "> 39.0 °C", min: 39.1, max: Number.POSITIVE_INFINITY, color: "bg-red-600" },
 ];
 
-export default function VsTemperature() {
+interface VsTemperatureProps {
+  onBack?: () => void;
+  onProceed?: () => void;
+}
+
+export default function VsTemperature({ onBack, onProceed }: VsTemperatureProps) {
   const [temperature, setTemperature] = useState("");
+  const [alertTriggered, setAlertTriggered] = useState(false);
 
   const temperatureValue = parseFloat(temperature);
   const isValidTemperature = !Number.isNaN(temperatureValue) && temperatureValue >= 30 && temperatureValue <= 45;
@@ -21,8 +27,37 @@ export default function VsTemperature() {
     return TEMPERATURE_CATEGORIES.find((item) => temperatureValue >= item.min && temperatureValue < item.max) ?? null;
   }, [temperatureValue, isValidTemperature]);
 
+  const criticalTempMessage = useMemo(() => {
+    if (!category) return null;
+    if (category.label === "🔴 CRITICAL LOW") return "Temperature is critically low. Please proceed to emergency care immediately.";
+    if (category.label === "🔴 CRITICAL HIGH") return "Temperature is critically high. Please proceed to emergency care immediately.";
+    return null;
+  }, [category]);
+
+  const showCriticalTempOverlay = alertTriggered && !!criticalTempMessage;
+
   return (
     <div className="">
+      {showCriticalTempOverlay && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950 bg-opacity-95 p-6">
+          <div className="w-full max-w-4xl bg-red-600 border-4 border-white rounded-xl p-10 text-center shadow-2xl animate-pulse">
+            <h3 className="text-5xl font-extrabold mb-4">IMMEDIATE ER REDIRECTION</h3>
+            <p className="text-2xl mb-5">{criticalTempMessage}</p>
+            <p className="text-3xl font-medium bg-red-950 px-6 py-5 rounded-lg inline-block">
+              Please get your ticket and proceed immediately to the ER!
+            </p>
+            <button
+              onClick={() => {
+                setTemperature("");
+                setAlertTriggered(false);
+              }}
+              className="block mx-auto mt-8 text-base text-red-200 hover:underline opacity-70"
+            >
+              Cancel / Reset Kiosk
+            </button>
+          </div>
+        </div>
+      )}
       {/* ── NAV ── */}
       <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-yellow-50">
         <div className="container mx-auto flex items-center justify-between">
@@ -79,7 +114,16 @@ export default function VsTemperature() {
               <p className="text-[0.9rem] text-cyan-300">Enter the value shown on the thermometer.</p>
             </div>
 
-            <form className="flex flex-col gap-[1rem]">
+            <form
+              onSubmit={(e) => {
+                e.preventDefault();
+                setAlertTriggered(true);
+                if (!criticalTempMessage) {
+                  onProceed?.();
+                }
+              }}
+              className="flex flex-col gap-[1rem]"
+            >
               <section className="flex flex-col gap-[0.25rem]">
                 <label className="text-[1.1rem] font-semibold text-white">
                   Temperature (°C) <span className="text-red-400">*</span>
@@ -117,7 +161,13 @@ export default function VsTemperature() {
 
               {/* Buttons */}
               <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">
-                <button type="button" className="text-[1rem] font-semibold bg-transparent text-orange-50 border border-orange-100 px-[1.5rem] py-[0.5rem] rounded-md hover:bg-cyan-800 cursor-pointer">← Back</button>
+                <button
+                  type="button"
+                  onClick={() => onBack?.()}
+                  className="text-[1rem] font-semibold bg-transparent text-orange-50 border border-orange-100 px-[1.5rem] py-[0.5rem] rounded-md hover:bg-cyan-800 cursor-pointer"
+                >
+                  ← Back
+                </button>
                 <button type="submit" className="text-[1.1rem] font-semibold bg-orange-50 text-cyan-950 px-[2.5rem] py-[0.5rem] rounded-md hover:bg-orange-100 cursor-pointer">Proceed</button>
               </div>
             </form>

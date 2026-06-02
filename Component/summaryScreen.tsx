@@ -7,28 +7,31 @@ import type { SummaryScreenProps, PatientStatus } from "./summaryTypes";
 
 export type { SummaryScreenProps };
 
-export default function SummaryScreen({
-  patientName = "DELA CRUZ, JUAN S.",
-  age = "32",
-  gender = "Male",
-  bpSys = "120",
-  bpDia = "80",
-  hr = "72",
-  spo2 = "98",
-  temperature = "36.8",
-  complaints = "Persistent Headache",
-  clinic = "Family Medicine",
-  queueCode = "FM-042",
-  date = "05/16/2026",
-  time = "08:42 AM",
-  patientStatus = "new",
-  referralFrom = "N/A",
-  referralDoctor = "N/A",
-  referralDate = "—",
-  referralPurpose = "—",
-  referralFormNo = "—",
-  referralDiagnosis = "—",
-}: SummaryScreenProps) {
+export default function SummaryScreen(props: SummaryScreenProps & { onFinish?: () => void }) {
+  const {
+    patientName = "DELA CRUZ, JUAN S.",
+    age = "32",
+    gender = "Male",
+    bpSys = "120",
+    bpDia = "80",
+    hr = "72",
+    spo2 = "98",
+    temperature = "36.8",
+    complaints = "Persistent Headache",
+    clinic = "Family Medicine",
+    queueCode = "FM-042",
+    date = "05/16/2026",
+    time = "08:42 AM",
+    patientStatus = "new",
+    referralFrom = "N/A",
+    referralDoctor = "N/A",
+    referralDate = "—",
+    referralPurpose = "—",
+    referralFormNo = "—",
+    referralDiagnosis = "—",
+    onFinish,
+  } = props as any;
+
   const currentStatus: PatientStatus = patientStatus;
 
   return (
@@ -226,6 +229,25 @@ export default function SummaryScreen({
             )}
           </div>
         </div>
+
+        <div className="w-[70rem] mt-4 flex justify-end gap-3">
+          <button
+            type="button"
+            onClick={() => window.print()}
+            className="bg-white text-cyan-950 font-semibold px-5 py-2 rounded-lg"
+          >
+            Print
+          </button>
+
+          <button
+            type="button"
+            onClick={() => onFinish?.()}
+            className="bg-emerald-400 text-cyan-950 font-semibold px-5 py-2 rounded-lg"
+          >
+            Finish
+          </button>
+        </div>
+
       </div>
     </div>
   );
