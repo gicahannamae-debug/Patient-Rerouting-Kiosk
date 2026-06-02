@@ -39,7 +39,7 @@ export default function DesiredClinic({ selectedClinic, onClinicSelect, onBack, 
         <div className="text-center max-w-4xl">
           <h1 className="text-[3rem] font-bold">Choose Desired Clinic</h1>
           <p className="text-[1.4rem] text-cyan-200 mt-3">
-            Select the clinic that the patient would like to proceed to before continuing with vital signs.
+            Select the clinic that the patient will be assigned to after vitals and the safety check.
           </p>
         </div>
 
@@ -81,7 +81,7 @@ export default function DesiredClinic({ selectedClinic, onClinicSelect, onBack, 
             disabled={!selectedClinic}
             className="w-full md:w-auto text-sm font-semibold uppercase tracking-wide bg-emerald-400 text-cyan-950 rounded-xl px-[1.75rem] py-[1rem] transition-opacity duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Continue to Vital Signs
+            Continue to Summary
           </button>
         </div>
       </div>

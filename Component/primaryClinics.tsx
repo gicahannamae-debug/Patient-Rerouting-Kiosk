@@ -1,11 +1,54 @@
 'use client';
 import React, { useState } from "react";
 
+type QuestionSection = "symptoms" | "history";
+
+type Question = {
+  id: string;
+  section: QuestionSection;
+  text: string;
+  redFlag: boolean;
+};
+
+type ClinicOption =
+  | "General Surgery"
+  | "Internal Medicine"
+  | "OB-GYNE"
+  | "OB-Gyne"
+  | "Pediatrics"
+  | "Family Medicine";
+
+type SubComplaint = {
+  id: string;
+  label: string;
+  sublabel?: string;
+  systemValue: string;
+  clinic: ClinicOption;
+  questions: Question[];
+};
+
+type ChiefComplaint = {
+  id: string;
+  label: string;
+  icon: string;
+  subComplaints: SubComplaint[];
+};
+
+type Group = {
+  id: string;
+  label: string;
+  shortLabel: string;
+  icon: string;
+  description: string;
+  clinic: ClinicOption;
+  chiefComplaints: ChiefComplaint[];
+};
+
 // ─────────────────────────────────────────────────────────────────────────────
 // DATA — All 5 groups fully populated from routing table
 // ─────────────────────────────────────────────────────────────────────────────
 
-const CATEGORY_GROUPS = [
+const CATEGORY_GROUPS: Group[] = [
   // ═══════════════════════════════════════════════════════════════════════════
   // GROUP 1 — GENERAL SURGERY
   // ═══════════════════════════════════════════════════════════════════════════
@@ -967,7 +1010,7 @@ const CATEGORY_GROUPS = [
 // UI COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function RedFlagOverlay({ onReset }) {
+function RedFlagOverlay({ onReset }: { onReset: () => void }) {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950/95">
       <div className="mx-4 w-full max-w-2xl rounded-2xl border-4 border-white bg-red-600 p-8 text-center shadow-2xl">
@@ -1008,7 +1051,7 @@ function NavBar() {
   );
 }
 
-function Breadcrumb({ step, group, cc, sub }) {
+function Breadcrumb({ step, group, cc, sub }: { step: number; group: Group | null; cc: ChiefComplaint | null; sub: SubComplaint | null }) {
   const steps = [
     { label: "Body Area",                         done: step > 1, active: step === 1 },
     { label: group?.shortLabel ?? "Concern Area", done: step > 2, active: step === 2 },
@@ -1032,8 +1075,8 @@ function Breadcrumb({ step, group, cc, sub }) {
   );
 }
 
-function SummaryPanel({ step, group, cc, sub, answers }) {
-  const totalQ   = sub?.questions?.length ?? 0;
+function SummaryPanel({ step, group, cc, sub, answers }: { step: number; group: Group | null; cc: ChiefComplaint | null; sub: SubComplaint | null; answers: Record<string, boolean> }) {
+  const totalQ   = sub?.questions.length ?? 0;
   const yesCount = Object.values(answers).filter(Boolean).length;
   return (
     <div className="w-52 flex-shrink-0">
@@ -1070,7 +1113,7 @@ function SummaryPanel({ step, group, cc, sub, answers }) {
 }
 
 // ─── STEP 1 ───────────────────────────────────────────────────────────────────
-function Step1({ onSelect }) {
+function Step1({ onSelect }: { onSelect: (group: Group) => void }) {
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -1101,7 +1144,7 @@ function Step1({ onSelect }) {
 }
 
 // ─── STEP 2 ───────────────────────────────────────────────────────────────────
-function Step2({ group, onSelect }) {
+function Step2({ group, onSelect }: { group: Group; onSelect: (cc: ChiefComplaint) => void }) {
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -1130,7 +1173,7 @@ function Step2({ group, onSelect }) {
 }
 
 // ─── STEP 3 ───────────────────────────────────────────────────────────────────
-function Step3({ cc, onSelect }) {
+function Step3({ cc, onSelect }: { cc: ChiefComplaint; onSelect: (sub: SubComplaint) => void }) {
   return (
     <div className="flex flex-col gap-5">
       <div>
@@ -1166,14 +1209,14 @@ function Step3({ cc, onSelect }) {
 }
 
 // ─── STEP 4 ───────────────────────────────────────────────────────────────────
-function Step4({ sub, answers, onAnswer }) {
-  const symptomQs = sub.questions.filter((q) => q.section === "symptoms");
-  const historyQs = sub.questions.filter((q) => q.section === "history");
+function Step4({ sub, answers, onAnswer }: { sub: SubComplaint; answers: Record<string, boolean>; onAnswer: (id: string, value: boolean) => void }) {
+  const symptomQs = sub.questions.filter((q: Question) => q.section === "symptoms");
+  const historyQs = sub.questions.filter((q: Question) => q.section === "history");
   const answered  = Object.keys(answers).length;
   const total     = sub.questions.length;
 
   let globalIdx = 0;
-  const renderQuestion = (q) => {
+  const renderQuestion = (q: Question) => {
     const idx    = globalIdx++;
     const isYes  = answers[q.id] === true;
     return (
@@ -1265,18 +1308,18 @@ interface PrimaryClinicsProps {
 }
 
 export default function PrimaryClinics({ onBack, onProceed }: PrimaryClinicsProps) {
-  const [step,    setStep]    = useState(1);
-  const [group,   setGroup]   = useState(null);
-  const [cc,      setCc]      = useState(null);
-  const [sub,     setSub]     = useState(null);
-  const [answers, setAnswers] = useState({});
+  const [step,    setStep]    = useState<number>(1);
+  const [group,   setGroup]   = useState<Group | null>(null);
+  const [cc,      setCc]      = useState<ChiefComplaint | null>(null);
+  const [sub,     setSub]     = useState<SubComplaint | null>(null);
+  const [answers, setAnswers] = useState<Record<string, boolean>>({});
   const [redFlag, setRedFlag] = useState(false);
 
-  const selectGroup = (g) => { setGroup(g); setCc(null); setSub(null); setAnswers({}); setStep(2); };
-  const selectCc    = (c) => { setCc(c);    setSub(null); setAnswers({}); setStep(3); };
-  const selectSub   = (s) => { setSub(s);   setAnswers({}); setStep(4); };
+  const selectGroup = (g: Group) => { setGroup(g); setCc(null); setSub(null); setAnswers({}); setStep(2); };
+  const selectCc    = (c: ChiefComplaint) => { setCc(c);    setSub(null); setAnswers({}); setStep(3); };
+  const selectSub   = (s: SubComplaint) => { setSub(s);   setAnswers({}); setStep(4); };
 
-  const handleAnswer = (id, value) => {
+  const handleAnswer = (id: string, value: boolean) => {
     const question = sub?.questions.find((q) => q.id === id);
     if (question?.redFlag && value === true) { setRedFlag(true); return; }
     setAnswers((prev) => ({ ...prev, [id]: value }));
