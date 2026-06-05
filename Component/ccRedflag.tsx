@@ -8,57 +8,92 @@ interface CcRedflagProps {
 
 export default function CcRedflag({ onBack, onProceed }: CcRedflagProps) {
   const [isEmergency, setIsEmergency] = useState(false);
-  const [alertData, setAlertData] = useState({ symptom: "", clinic: "" });
+  const [alertData, setAlertData] = useState({ symptom: "" });
+  const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
 
-  const handleGoEmergency = (symptom: string, clinic: string) => {
-    setAlertData({ symptom, clinic });
+  const handleGoEmergency = (symptom: string) => {
+    setAlertData({ symptom });
     setIsEmergency(true);
 
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('bica_emergency', JSON.stringify({ symptom, clinic }));
+      sessionStorage.setItem('bica_emergency', JSON.stringify({ symptom }));
     }
   };
 
-  const redFlags = [
+  const redFlagGroups = [
     {
-      question: "Are you feeling confused, disoriented, or not acting like yourself?",
-      symptom: "Altered mental status / confusion",
-      clinic: "ER / Neurology",
+      title: "Brain & Mental State",
+      items: [
+        {
+          question: "Are you experiencing sudden confusion or having a hard time thinking clearly right now?",
+          symptom: "Sudden confusion / altered state",
+        },
+        {
+          question: "Do you have signs of a stroke? (Sudden face drooping, weakness in one arm, or slurred speech)",
+          symptom: "Signs of a stroke (FAST)",
+        },
+        {
+          question: "Did you pass out, faint, or lose consciousness earlier?",
+          symptom: "Fainted / lost consciousness",
+        },
+        {
+          question: "Are you currently having, or did you just have, a seizure or uncontrollable shaking?",
+          symptom: "Active or recent seizures",
+        },
+      ],
     },
     {
-      question: "Are you having severe difficulty breathing or gasping for air?",
-      symptom: "Severe difficulty breathing",
-      clinic: "ER / Pulmonology",
+      title: "Breathing & Heart",
+      items: [
+        {
+          question: "Are you having severe trouble breathing, gasping for air, or feeling suffocated?",
+          symptom: "Severe breathing trouble",
+        },
+      ],
     },
     {
-      question: "Do you have heavy, uncontrolled bleeding or blood in your vomit or stool?",
-      symptom: "Uncontrolled bleeding / blood in vomit or stool",
-      clinic: "Trauma / Surgery ER",
+      title: "Bleeding & Injuries",
+      items: [
+        {
+          question: "Do you have heavy bleeding that will not stop even when you press hard on the wound?",
+          symptom: "Uncontrolled heavy bleeding",
+        },
+        {
+          question: "Are you vomiting blood, or is your stool (tae) bloody, black, or tarry?",
+          symptom: "Vomiting blood / bloody or black stool",
+        },
+        {
+          question: "Were you just in a severe accident or injury with suspected internal damage?",
+          symptom: "Severe accident / trauma",
+        },
+      ],
     },
     {
-      question: "Are you in extreme, unbearable pain (rated 9–10 out of 10)?",
-      symptom: "Extreme pain (9–10/10)",
-      clinic: "ER / Pain Management",
+      title: "Severe Pain",
+      items: [
+        {
+          question: "Are you experiencing sudden, unbearable pain? (Worst pain imaginable, rated 9 or 10 out of 10)",
+          symptom: "Sudden pain rated 9–10/10",
+        },
+      ],
     },
     {
-      question: "Have you fainted, lost consciousness, or are you currently having a seizure?",
-      symptom: "Loss of consciousness / active seizure",
-      clinic: "ER / Neurology",
+      title: "Poisoning & Overdose",
+      items: [
+        {
+          question: "Did you swallow poison, toxic chemicals, or have a drug overdose?",
+          symptom: "Swallowed poison / chemical overdose",
+        },
+      ],
     },
     {
-      question: "Do you have sudden face drooping, arm weakness, or slurred speech?",
-      symptom: "Stroke signs (FAST positive)",
-      clinic: "Neurology ER",
-    },
-    {
-      question: "Are you pregnant and experiencing severe belly pain or heavy bleeding?",
-      symptom: "Pregnancy with severe abdominal pain or heavy bleeding",
-      clinic: "OB-GYN ER",
-    },
-    {
-      question: "Did you suffer a serious injury or suspect you have been poisoned?",
-      symptom: "Serious injury / suspected poisoning",
-      clinic: "Trauma / Toxicology ER",
+      title: "Pregnancy Emergencies",
+      items: [
+        {
+          question: "If pregnant: Are you experiencing vaginal bleeding or severe stomach pain?",
+          symptom: "Pregnancy bleeding / severe abdominal pain",
+        },
+      ],
     },
   ];
 
@@ -117,24 +152,56 @@ export default function CcRedflag({ onBack, onProceed }: CcRedflagProps) {
                 Tap YES on any that apply — you will be directed to the emergency area immediately
               </h3>
 
-              {/* 4-column grid */}
-              <div className="grid grid-cols-4 gap-4">
-                {redFlags.map((flag, index) => (
-                  <button
-                    key={index}
-                    onClick={() => handleGoEmergency(flag.symptom, flag.clinic)}
-                    className="bg-red-800 border border-red-400 rounded-xl p-6 text-left hover:bg-red-700 active:scale-95 transition-all cursor-pointer group flex flex-col justify-between gap-4 min-h-[180px]"
-                  >
-                    <div className="flex flex-col gap-3">
-                      <p className="text-red-100 text-xl font-medium group-hover:text-white leading-snug">
-                        {flag.question}
-                      </p>
+                <div className="space-y-8">
+                <div className="rounded-3xl border border-red-500 bg-red-950/80 p-5 min-h-[480px] flex flex-col justify-between">
+                  <div>
+                    <p className="text-sm text-red-200 uppercase tracking-widest mb-5">
+                      Group {currentGroupIndex + 1} of {redFlagGroups.length}
+                    </p>
+                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+                      {redFlagGroups[currentGroupIndex].items.map((flag, itemIndex) => (
+                        <button
+                          key={itemIndex}
+                          onClick={() => handleGoEmergency(flag.symptom)}
+                          className="bg-red-800 border border-red-400 rounded-xl p-6 text-left hover:bg-red-700 active:scale-95 transition-all cursor-pointer group flex flex-col justify-between gap-4 min-h-[180px]"
+                        >
+                          <div className="flex flex-col gap-3">
+                            <p className="text-red-100 text-3xl font-semibold group-hover:text-white leading-snug">
+                              {flag.question}
+                            </p>
+                          </div>
+                          <span className="self-end bg-red-600 group-hover:bg-red-500 text-white text-base font-bold px-5 py-2 rounded-md border border-red-300 tracking-wide">
+                            YES →
+                          </span>
+                        </button>
+                      ))}
                     </div>
-                    <span className="self-end bg-red-600 group-hover:bg-red-500 text-white text-base font-bold px-5 py-2 rounded-md border border-red-300 tracking-wide">
-                      YES →
-                    </span>
-                  </button>
-                ))}
+                  </div>
+
+                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                    <button
+                      type="button"
+                      disabled={currentGroupIndex === 0}
+                      onClick={() => setCurrentGroupIndex((index) => Math.max(0, index - 1))}
+                      className="w-full sm:w-auto text-center bg-transparent border border-white/30 text-white text-base font-semibold py-4 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      ← Previous group
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (currentGroupIndex === redFlagGroups.length - 1) {
+                          onProceed?.();
+                        } else {
+                          setCurrentGroupIndex((index) => Math.min(redFlagGroups.length - 1, index + 1));
+                        }
+                      }}
+                      className="w-full sm:w-auto text-center bg-[#083344] border-2 border-[#fefce8] text-white text-base font-bold py-4 rounded-xl hover:bg-[#0e4f68] transition-colors"
+                    >
+                      If none apply, proceed
+                    </button>
+                  </div>
+                </div>
               </div>
             </div>
 
