@@ -3,7 +3,17 @@ import React from "react";
 
 interface ReferralDetailsProps {
   onBack?: () => void;
-  onProceed?: () => void;
+  onProceed?: (values: {
+    referringFacility: string;
+    facilityType: string;
+    referringDoctor: string;
+    referringContact: string;
+    referralDate: string;
+    referralDiagnosis: string;
+    referralPurpose: string;
+    interventions: string;
+    referralFormNo: string;
+  }) => void;
 }
 
 export default function referralDetails({ onBack, onProceed }: ReferralDetailsProps) {
@@ -48,7 +58,18 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              onProceed?.();
+              const formData = new FormData(event.currentTarget);
+              onProceed?.({
+                referringFacility: (formData.get("referringFacility") as string) ?? "",
+                facilityType: (formData.get("facilityType") as string) ?? "",
+                referringDoctor: (formData.get("referringDoctor") as string) ?? "",
+                referringContact: (formData.get("referringContact") as string) ?? "",
+                referralDate: (formData.get("referralDate") as string) ?? "",
+                referralDiagnosis: (formData.get("referralDiagnosis") as string) ?? "",
+                referralPurpose: (formData.get("referralPurpose") as string) ?? "",
+                interventions: (formData.get("interventions") as string) ?? "",
+                referralFormNo: (formData.get("referralFormNo") as string) ?? "",
+              });
             }}
             className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]"
           >
@@ -58,6 +79,7 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Referring Hospital / Clinic</label>
               <input
+                name="referringFacility"
                 type="text"
                 placeholder="e.g. Bukidnon Provincial Hospital"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
@@ -66,7 +88,10 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Facility Type</label>
-              <select className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300">
+              <select
+                name="facilityType"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
+              >
                 <option value="">— select —</option>
                 <option>Barangay Health Center</option>
                 <option>Rural Health Unit (RHU)</option>
@@ -85,6 +110,7 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Referring Doctor</label>
               <input
+                name="referringDoctor"
                 type="text"
                 placeholder="e.g. Dr. Juan Dela Cruz"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
@@ -94,6 +120,7 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Doctor's Contact No.</label>
               <input
+                name="referringContact"
                 type="tel"
                 placeholder="e.g. 09XX-XXX-XXXX"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
@@ -103,6 +130,7 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
             <section className="flex flex-col gap-[0.25rem] w-[14rem]">
               <label className="text-[1.1rem] font-semibold text-white">Date of Referral</label>
               <input
+                name="referralDate"
                 type="date"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
               />
@@ -116,6 +144,7 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Diagnosis / Chief Complaint from Referring Facility</label>
               <input
+                name="referralDiagnosis"
                 type="text"
                 placeholder="e.g. Community-acquired pneumonia, severe"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
@@ -124,7 +153,10 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Purpose of Referral</label>
-              <select className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300">
+              <select
+                name="referralPurpose"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
+              >
                 <option value="">— select —</option>
                 <option>Further management / higher level of care</option>
                 <option>Specialist consultation</option>
@@ -145,6 +177,7 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Interventions / Treatments Given Before Referral</label>
               <input
+                name="interventions"
                 type="text"
                 placeholder="e.g. O2 support started, IV fluids given, medications given"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
@@ -154,6 +187,7 @@ export default function referralDetails({ onBack, onProceed }: ReferralDetailsPr
             <section className="flex flex-col gap-[0.25rem] w-[14rem]">
               <label className="text-[1.1rem] font-semibold text-white">Referral Form No.</label>
               <input
+                name="referralFormNo"
                 type="text"
                 placeholder="e.g. RF-2026-00123"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"

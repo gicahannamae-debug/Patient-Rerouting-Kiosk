@@ -18,7 +18,7 @@ const HR_CATEGORIES = [
 
 interface VsOximeterProps {
   onBack?: () => void;
-  onProceed?: () => void;
+  onProceed?: (values: { spo2: string; hr: string }) => void;
 }
 
 export default function vsOximeter({ onBack, onProceed }: VsOximeterProps) {
@@ -148,8 +148,8 @@ export default function vsOximeter({ onBack, onProceed }: VsOximeterProps) {
               onSubmit={(e) => {
                 e.preventDefault();
                 setAlertTriggered(true);
-                if (!criticalOximeterMessage) {
-                  onProceed?.();
+                if (isValidSpo2 && isValidHeartRate && !criticalOximeterMessage) {
+                  onProceed?.({ spo2, hr: heartRate });
                 }
               }}
               className="flex flex-col gap-[1rem]"

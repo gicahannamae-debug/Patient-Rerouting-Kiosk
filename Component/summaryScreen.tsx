@@ -12,6 +12,8 @@ export default function SummaryScreen(props: SummaryScreenProps & { onFinish?: (
     patientName = "DELA CRUZ, JUAN S.",
     age = "32",
     gender = "Male",
+    patientAddress = "",
+    pwdStatus = "",
     bpSys = "120",
     bpDia = "80",
     hr = "72",
@@ -19,6 +21,7 @@ export default function SummaryScreen(props: SummaryScreenProps & { onFinish?: (
     temperature = "36.8",
     complaints = "Persistent Headache",
     clinic = "Family Medicine",
+    destination = "Family Medicine",
     queueCode = "FM-042",
     date = "05/16/2026",
     time = "08:42 AM",
@@ -100,6 +103,18 @@ export default function SummaryScreen(props: SummaryScreenProps & { onFinish?: (
                     <p className="text-[7px] text-gray-600">Sex:</p>
                     <p className="text-[7px] font-semibold">{gender}</p>
                   </div>
+                  {patientAddress && (
+                    <div className="flex flex-row justify-between">
+                      <p className="text-[7px] text-gray-600">Address:</p>
+                      <p className="text-[7px] font-semibold text-right w-[130px] leading-tight">{patientAddress}</p>
+                    </div>
+                  )}
+                  {pwdStatus && (
+                    <div className="flex flex-row justify-between">
+                      <p className="text-[7px] text-gray-600">PWD:</p>
+                      <p className="text-[7px] font-semibold">{pwdStatus}</p>
+                    </div>
+                  )}
                 </div>
                 <div className="border-t border-dashed border-gray-400 my-[3px]" />
                 <div className="flex flex-row justify-between">
@@ -157,6 +172,8 @@ export default function SummaryScreen(props: SummaryScreenProps & { onFinish?: (
                 <div className="border-t border-dashed border-gray-400 my-[3px]" />
                 <p className="text-[7.5px] font-bold uppercase">Assigned Clinic</p>
                 <p className="text-[8px] pl-[4px] font-bold">{clinic}</p>
+                <p className="text-[7px] text-gray-600 mt-[1px] uppercase tracking-wider">Destination</p>
+                <p className="text-[8px] pl-[4px] font-semibold">{destination}</p>
                 <div className="border-t border-gray-400 my-[4px]" />
                 <div className="flex flex-col items-center py-[4px]">
                   <p className="text-[7.5px] text-gray-600 uppercase tracking-wider">Queue Number</p>
@@ -188,6 +205,7 @@ export default function SummaryScreen(props: SummaryScreenProps & { onFinish?: (
                 temperature={temperature}
                 complaints={complaints}
                 clinic={clinic}
+                destination={destination}
                 queueCode={queueCode}
               />
             )}
@@ -203,6 +221,7 @@ export default function SummaryScreen(props: SummaryScreenProps & { onFinish?: (
                 temperature={temperature}
                 complaints={complaints}
                 clinic={clinic}
+                destination={destination}
                 queueCode={queueCode}
               />
             )}
@@ -218,6 +237,7 @@ export default function SummaryScreen(props: SummaryScreenProps & { onFinish?: (
                 temperature={temperature}
                 complaints={complaints}
                 clinic={clinic}
+                destination={destination}
                 queueCode={queueCode}
                 referralFrom={referralFrom}
                 referralDoctor={referralDoctor}

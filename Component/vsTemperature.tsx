@@ -12,7 +12,7 @@ const TEMPERATURE_CATEGORIES = [
 
 interface VsTemperatureProps {
   onBack?: () => void;
-  onProceed?: () => void;
+  onProceed?: (values: { temperature: string }) => void;
 }
 
 export default function VsTemperature({ onBack, onProceed }: VsTemperatureProps) {
@@ -118,8 +118,8 @@ export default function VsTemperature({ onBack, onProceed }: VsTemperatureProps)
               onSubmit={(e) => {
                 e.preventDefault();
                 setAlertTriggered(true);
-                if (!criticalTempMessage) {
-                  onProceed?.();
+                if (isValidTemperature && !criticalTempMessage) {
+                  onProceed?.({ temperature });
                 }
               }}
               className="flex flex-col gap-[1rem]"

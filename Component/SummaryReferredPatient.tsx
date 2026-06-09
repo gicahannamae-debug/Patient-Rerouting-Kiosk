@@ -12,6 +12,7 @@ export default function SummaryReferredPatient({
   temperature,
   complaints,
   clinic,
+  destination,
   queueCode,
   referralFrom,
   referralDoctor,
@@ -123,6 +124,7 @@ export default function SummaryReferredPatient({
         <div className="flex flex-col flex-1 px-[1.2rem] py-[1rem] justify-center">
           <p className="text-[0.72rem] font-semibold text-cyan-700 uppercase tracking-wider">Assigned Clinic</p>
           <p className="text-[1.4rem] font-bold text-cyan-950">{clinic}</p>
+          <p className="text-[0.85rem] text-cyan-600 mt-[0.2rem]">Destination: {destination ?? clinic}</p>
           <p className="text-[0.75rem] text-cyan-600 mt-[0.2rem]">Proceed to this clinic window.</p>
         </div>
       </div>

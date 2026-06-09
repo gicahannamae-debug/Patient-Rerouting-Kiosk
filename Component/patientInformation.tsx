@@ -3,7 +3,16 @@ import React from "react";
 
 interface PatientInformationProps {
   onBack?: () => void;
-  onProceed?: () => void;
+  onProceed?: (values: {
+    lastName: string;
+    firstName: string;
+    middleName: string;
+    pwdStatus: string;
+    birthdate: string;
+    age: string;
+    gender: string;
+    address: string;
+  }) => void;
 }
 
 export default function patientInformation({ onBack, onProceed }: PatientInformationProps) {
@@ -48,7 +57,17 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              onProceed?.();
+              const formData = new FormData(event.currentTarget);
+              onProceed?.({
+                lastName: (formData.get("lastName") as string) ?? "",
+                firstName: (formData.get("firstName") as string) ?? "",
+                middleName: (formData.get("middleName") as string) ?? "",
+                pwdStatus: (formData.get("pwdStatus") as string) ?? "",
+                birthdate: (formData.get("birthdate") as string) ?? "",
+                age: (formData.get("age") as string) ?? "",
+                gender: (formData.get("gender") as string) ?? "",
+                address: (formData.get("address") as string) ?? "",
+              });
             }}
             className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]"
           >
@@ -58,6 +77,7 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Last Name</label>
               <input
+                name="lastName"
                 type="text"
                 placeholder="e.g. Gica"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -67,6 +87,7 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">First Name</label>
               <input
+                name="firstName"
                 type="text"
                 placeholder="e.g. Hanna Mae"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -76,6 +97,7 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Middle Name</label>
               <input
+                name="middleName"
                 type="text"
                 placeholder="e.g. Tanggan"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -84,7 +106,10 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
 
             <section className="flex flex-col gap-[0.25rem] w-[9rem]">
               <label className="text-[1.1rem] font-semibold text-white">PWD?</label>
-              <select className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300">
+              <select
+                name="pwdStatus"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              >
                 <option value="">— select —</option>
                 <option>Not PWD</option>
                 <option>Yes, PWD</option>
@@ -99,6 +124,7 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Birthdate</label>
               <input
+                name="birthdate"
                 type="date"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
@@ -107,6 +133,7 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
             <section className="flex flex-col gap-[0.25rem] w-[8rem]">
               <label className="text-[1.1rem] font-semibold text-white">Age</label>
               <input
+                name="age"
                 type="number"
                 placeholder="0"
                 min="0"
@@ -117,7 +144,10 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Sex</label>
-              <select className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300">
+              <select
+                name="gender"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              >
                 <option value="">— select —</option>
                 <option>Male</option>
                 <option>Female</option>
@@ -132,6 +162,7 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Address</label>
               <input
+                name="address"
                 type="text"
                 placeholder="e.g. House No., Street, Barangay, City, Province"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"

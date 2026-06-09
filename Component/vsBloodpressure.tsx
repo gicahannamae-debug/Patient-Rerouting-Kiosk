@@ -13,7 +13,7 @@ const BP_CATEGORIES = [
 
 interface VsBloodpressureProps {
   onBack?: () => void;
-  onProceed?: () => void;
+  onProceed?: (values: { bpSys: string; bpDia: string }) => void;
 }
 
 export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressureProps) {
@@ -137,8 +137,8 @@ export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressurePr
               onSubmit={(e) => {
                 e.preventDefault();
                 setAlertTriggered(true);
-                if (!criticalBpMessage) {
-                  onProceed?.();
+                if (isValidSystolic && isValidDiastolic && !criticalBpMessage) {
+                  onProceed?.({ bpSys: systolic, bpDia: diastolic });
                 }
               }}
               className="flex flex-col gap-[1rem] bg-cyan-950 rounded-lg p-[1rem]"

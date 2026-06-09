@@ -6,6 +6,8 @@ export type SummaryScreenProps = {
   patientName?: string;
   age?: string | number;
   gender?: string;
+  patientAddress?: string;
+  pwdStatus?: string;
   bpSys?: string | number;
   bpDia?: string | number;
   hr?: string | number;
@@ -13,6 +15,7 @@ export type SummaryScreenProps = {
   temperature?: string | number;
   complaints?: string;
   clinic?: string;
+  destination?: string;
   queueCode?: string;
   date?: string;
   time?: string;

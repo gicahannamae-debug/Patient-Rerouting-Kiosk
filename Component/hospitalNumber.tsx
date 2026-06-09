@@ -3,7 +3,18 @@ import React from "react";
 
 interface HospitalNumberProps {
   onBack?: () => void;
-  onProceed?: () => void;
+  onProceed?: (values: {
+    hospitalNumber: string;
+    philhealthId: string;
+    lastName: string;
+    firstName: string;
+    middleName: string;
+    birthdate: string;
+    age: string;
+    gender: string;
+    contactNumber: string;
+    purpose: string;
+  }) => void;
 }
 
 export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProps) {
@@ -48,7 +59,19 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
           <form
             onSubmit={(event) => {
               event.preventDefault();
-              onProceed?.();
+              const formData = new FormData(event.currentTarget);
+              onProceed?.({
+                hospitalNumber: (formData.get("hospitalNumber") as string) ?? "",
+                philhealthId: (formData.get("philhealthId") as string) ?? "",
+                lastName: (formData.get("lastName") as string) ?? "",
+                firstName: (formData.get("firstName") as string) ?? "",
+                middleName: (formData.get("middleName") as string) ?? "",
+                birthdate: (formData.get("birthdate") as string) ?? "",
+                age: (formData.get("age") as string) ?? "",
+                gender: (formData.get("gender") as string) ?? "",
+                contactNumber: (formData.get("contactNumber") as string) ?? "",
+                purpose: (formData.get("purpose") as string) ?? "",
+              });
             }}
             className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]"
           >
@@ -60,6 +83,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
                 Hospital Number (HN) 
               </label>
               <input
+                name="hospitalNumber"
                 type="text"
                 placeholder="e.g. 2024-000123"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300 tracking-widest"
@@ -70,6 +94,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">PhilHealth ID No.</label>
               <input
+                name="philhealthId"
                 type="text"
                 placeholder="e.g. 00-000000000-0"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -87,6 +112,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
                 Last Name 
               </label>
               <input
+                name="lastName"
                 type="text"
                 placeholder="e.g. Dela Cruz"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -98,6 +124,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
                 First Name 
               </label>
               <input
+                name="firstName"
                 type="text"
                 placeholder="e.g. Juan"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -107,6 +134,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">Middle Name</label>
               <input
+                name="middleName"
                 type="text"
                 placeholder="e.g. Santos"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -123,6 +151,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
                 Birthdate 
               </label>
               <input
+                name="birthdate"
                 type="date"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
@@ -134,6 +163,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
                 Age 
               </label>
               <input
+                name="age"
                 type="number"
                 placeholder="0"
                 min="0"
@@ -146,7 +176,10 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
               <label className="text-[1.1rem] font-semibold text-white">
                 Sex 
               </label>
-              <select className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300">
+              <select
+                name="gender"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              >
                 <option value="">— select —</option>
                 <option>Male</option>
                 <option>Female</option>
@@ -163,6 +196,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
                 Registered Contact Number
               </label>
               <input
+                name="contactNumber"
                 type="tel"
                 placeholder="e.g. 09XX-XXX-XXXX"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
@@ -174,7 +208,10 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
               <label className="text-[1.1rem] font-semibold text-white">
                 Purpose of Visit 
               </label>
-              <select className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300">
+              <select
+                name="purpose"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              >
                 <option value="">— select —</option>
                 <option>OPD check-in / follow-up</option>
                 <option>Lab / diagnostic result</option>

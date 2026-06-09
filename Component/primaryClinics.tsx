@@ -1339,8 +1339,11 @@ export default function PrimaryClinics({ onBack, onProceed }: PrimaryClinicsProp
   const handleProceed = () => {
     const payload = {
       group_id:     group?.id,
+      group_label:  group?.label,
       cc_id:        cc?.id,
+      cc_label:     cc?.label,
       sub_id:       sub?.id,
+      sub_label:    sub?.label,
       system_value: sub?.systemValue,
       clinic:       sub?.clinic,
       answers,
