@@ -1,5 +1,5 @@
 'use client'
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import WelcomeScreen from "@/Component/welcomeScreen";
 import PatientCategory, { PatientCategoryType } from "@/Component/patientCategory";
 import PatientInformation from "@/Component/patientInformation";
@@ -12,9 +12,35 @@ import VsBloodpressure from "@/Component/vsBloodpressure";
 import VsOximeter from "@/Component/vsOximeter";
 import CcRedflag from "@/Component/ccRedflag";
 import SummaryScreen from "@/Component/summaryScreen";
+import ClinicDashboard from "@/Component/clinicDashboard";
+import OperatorLogin from "@/Component/operatorLogin";
 
 type AppStep = "welcome" | "category" | "patientForm" | "clinicChoice" | "primaryClinics" | "vitals" | "safety" | "summary";
+type ViewMode = "selector" | "kiosk" | "dashboard";
 type VitalStage = "bp" | "oximetry" | "temperature";
+
+const ModeSelector = ({ onSelect }: { onSelect: (mode: "kiosk" | "dashboard") => void }) => (
+  <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-6 py-12 bg-cyan-950 text-white">
+    <h1 className="text-5xl font-bold">BICA Access</h1>
+    <p className="max-w-2xl text-center text-lg text-cyan-100">
+      Select how you want to continue: patient kiosk self-triage or the clinic dashboard.
+    </p>
+    <div className="flex flex-col sm:flex-row gap-4">
+      <button
+        onClick={() => onSelect("kiosk")}
+        className="rounded-xl bg-orange-400 px-8 py-4 text-xl font-semibold text-cyan-950 hover:bg-orange-300"
+      >
+        Patient Kiosk
+      </button>
+      <button
+        onClick={() => onSelect("dashboard")}
+        className="rounded-xl border border-white/40 bg-transparent px-8 py-4 text-xl font-semibold text-white hover:bg-white/10"
+      >
+        Clinic Dashboard
+      </button>
+    </div>
+  </div>
+);
 
 type PatientInfo = {
   lastName: string;
@@ -111,6 +137,8 @@ const generateQueueCode = (clinic: ClinicOption) => {
 };
 
 export default function Home() {
+  const [operatorAuthenticated, setOperatorAuthenticated] = useState<boolean>(false);
+  const [viewMode, setViewMode] = useState<ViewMode>("selector");
   const [step, setStep] = useState<AppStep>("welcome");
   const [selectedCategory, setSelectedCategory] = useState<PatientCategoryType>(null);
   const [selectedClinic, setSelectedClinic] = useState<ClinicOption | null>(null);
@@ -165,6 +193,51 @@ export default function Home() {
   const updateTicketDateTime = () => {
     setDate(getCurrentDate());
     setTime(getCurrentTime());
+  };
+
+  const handleSelectMode = (mode: "kiosk" | "dashboard") => {
+    setViewMode(mode);
+    if (mode === "kiosk") {
+      setStep("welcome");
+      setSelectedCategory(null);
+      setSelectedClinic(null);
+      setVitalStage("bp");
+      setPatientInfo({ lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "", gender: "", address: "" });
+      setReturningInfo({ hospitalNumber: "", philhealthId: "", lastName: "", firstName: "", middleName: "", birthdate: "", age: "", gender: "", contactNumber: "", purpose: "" });
+      setReferralInfo({ referringFacility: "", facilityType: "", referringDoctor: "", referringContact: "", referralDate: "", referralDiagnosis: "", referralPurpose: "", interventions: "", referralFormNo: "" });
+      setVitals({ bpSys: "", bpDia: "", hr: "", spo2: "", temperature: "" });
+      setTriageSelection({ groupLabel: "", ccLabel: "", subLabel: "", clinic: "Family Medicine", systemValue: "", answers: {} });
+      setQueueCode("FM-042");
+      setDestination(clinicDestinations["Family Medicine"]);
+      setDate(getCurrentDate());
+      setTime(getCurrentTime());
+    }
+  };
+
+  useEffect(() => {
+    const s = typeof window !== 'undefined' ? sessionStorage.getItem('operatorAuth') : null;
+    setOperatorAuthenticated(s === '1');
+  }, []);
+
+  const handleOperatorLogin = () => {
+    setOperatorAuthenticated(true);
+    if (typeof window !== 'undefined') sessionStorage.setItem('operatorAuth', '1');
+  };
+
+  const handleOperatorLogout = () => {
+    setOperatorAuthenticated(false);
+    if (typeof window !== 'undefined') sessionStorage.removeItem('operatorAuth');
+  };
+
+  const handleExitToOperator = () => {
+    // Return to selector and clear operator session so operator must sign in again
+    setViewMode('selector');
+    handleOperatorLogout();
+  };
+
+  const handleBackToMode = () => {
+    setViewMode("selector");
+    setStep("welcome");
   };
 
   const handleStart = () => setStep("category");
@@ -262,6 +335,7 @@ export default function Home() {
     setDate(getCurrentDate());
     setTime(getCurrentTime());
     setStep("welcome");
+    setViewMode("kiosk");
   };
 
   const patientName = selectedCategory === "old"
@@ -279,7 +353,18 @@ export default function Home() {
 
   return (
     <div className="w-auto h-auto">
-      {step === "welcome" && <WelcomeScreen onStart={handleStart} />}
+      {viewMode === "selector" && (
+        operatorAuthenticated ? <ModeSelector onSelect={handleSelectMode} /> : <OperatorLogin onLogin={handleOperatorLogin} />
+      )}
+      {viewMode === "selector" && operatorAuthenticated && (
+        <div className="fixed top-4 right-4">
+          <button onClick={handleOperatorLogout} className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white">Log out</button>
+        </div>
+      )}
+      {viewMode === "dashboard" && <ClinicDashboard onBack={handleBackToMode} />}
+      {viewMode === "kiosk" && (
+        <>
+          {step === "welcome" && <WelcomeScreen onStart={handleStart} />}
 
       {step === "category" && (
         <PatientCategory
@@ -356,10 +441,11 @@ export default function Home() {
           referralDoctor={referralInfo.referringDoctor}
           referralDate={referralInfo.referralDate}
           referralPurpose={referralInfo.referralPurpose}
-          referralFormNo={referralInfo.referralFormNo}
           referralDiagnosis={referralInfo.referralDiagnosis}
           onFinish={handleFinish}
         />
+      )}
+        </>
       )}
     </div>
   );
