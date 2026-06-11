@@ -6,8 +6,8 @@ const TEMPERATURE_CATEGORIES = [
   { label: "Hypothermia", range: "35.0 – 36.9 °C", min: 35.0, max: 37.0, color: "bg-blue-400" },
   { label: "Normal", range: "37.0 – 37.2 °C", min: 37.0, max: 37.3, color: "bg-green-400" },
   { label: "Low-grade Fever", range: "37.3 – 38.0 °C", min: 37.3, max: 38.1, color: "bg-yellow-400" },
-  { label: "Moderate Fever", range: "38.1 – 39.0 °C", min: 38.1, max: 39.1, color: "bg-orange-400" },
-  { label: "🔴 CRITICAL HIGH", range: "> 39.0 °C", min: 39.1, max: Number.POSITIVE_INFINITY, color: "bg-red-600" },
+  { label: "Moderate Fever", range: "38.1 – 41.5 °C", min: 38.1, max: 41.5, color: "bg-orange-400" },
+  { label: "🔴 CRITICAL HIGH", range: "> 41.5 °C", min: 41.5, max: Number.POSITIVE_INFINITY, color: "bg-red-600" },
 ];
 
 interface VsTemperatureProps {
