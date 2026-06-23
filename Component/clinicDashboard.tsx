@@ -33,50 +33,42 @@ interface Clinic {
 // ─── Clinic Definitions ───────────────────────────────────────────────────────
 
 const CLINICS: Clinic[] = [
-  { code: 'SUR', name: 'Surgery',           staffId: 'sur', staffCode: 's123', color: 'cyan'   },
-  { code: 'PED', name: 'Pediatrics',        staffId: 'pedia', staffCode: 'p123', color: 'green'  },
-  { code: 'OBG', name: 'OB-GYN',           staffId: 'obgyn', staffCode: 'o123', color: 'pink'   },
-  { code: 'ENT', name: 'ENT',              staffId: 'ent', staffCode: 'e123', color: 'purple' },
-  { code: 'IM',  name: 'Internal Medicine', staffId: 'im',  staffCode: 'i123', color: 'blue'   },
-  { code: 'ER',  name: 'Emergency Dept.',  staffId: 'er',  staffCode: 'e123', color: 'red', isER: true },
+  { code: 'SUR', name: 'Surgery',           staffId: 'NMMC-SUR-047', staffCode: 'Sc#3kW9!', color: 'cyan'   },
+  { code: 'PED', name: 'Pediatrics',        staffId: 'NMMC-PED-112', staffCode: 'Pd@7mR2$', color: 'green'  },
+  { code: 'OBG', name: 'OB-GYN',           staffId: 'NMMC-OBG-083', staffCode: 'Og%4nX6^', color: 'pink'   },
+  { code: 'ENT', name: 'ENT',              staffId: 'NMMC-ENT-029', staffCode: 'En!8qL1#', color: 'purple' },
+  { code: 'IM',  name: 'Internal Medicine', staffId: 'NMMC-IM-156',  staffCode: 'Im*5jH3@', color: 'blue'   },
+  { code: 'ER',  name: 'Emergency Dept.',  staffId: 'NMMC-ER-001',  staffCode: 'Er$2bV7!', color: 'red', isER: true },
 ];
 
 // ─── Seed / Mock Data ─────────────────────────────────────────────────────────
 
 function generateTicket(clinic: ClinicCode, cat: Category, num: number): string {
-  const catCode = cat === 'URGENT' ? 'U' : cat === 'PRIORITY' ? 'P' : cat === 'REGULAR' ? 'R' : 'E';
+  const catCode = cat === 'URGENT' ? 'U' : cat === 'PRIORITY' ? 'P' : 'R';
   return `${clinic}-${catCode}-${String(num).padStart(3, '0')}`;
 }
 
 const SEED_PATIENTS: Patient[] = [
-  // Surgery
   { id:'p1',  ticketCode: generateTicket('SUR','URGENT',1),   name:'Maria Santos',    age:58, sex:'F', chiefComplaints:['Severe abdominal pain','Vomiting'],       category:'URGENT',   clinic:'SUR', status:'waiting', queueNumber:1,  arrivedAt:'08:12' },
   { id:'p2',  ticketCode: generateTicket('SUR','URGENT',2),   name:'Ricardo Diaz',    age:44, sex:'M', chiefComplaints:['Post-op wound dehiscence'],               category:'URGENT',   clinic:'SUR', status:'waiting', queueNumber:2,  arrivedAt:'08:30' },
   { id:'p3',  ticketCode: generateTicket('SUR','PRIORITY',1), name:'Elena Cruz',      age:36, sex:'F', chiefComplaints:['Inguinal hernia','Pain on movement'],      category:'PRIORITY', clinic:'SUR', status:'waiting', queueNumber:3,  arrivedAt:'08:45' },
   { id:'p4',  ticketCode: generateTicket('SUR','REGULAR',1),  name:'Jose Reyes',      age:62, sex:'M', chiefComplaints:['Skin cyst removal follow-up'],            category:'REGULAR',  clinic:'SUR', status:'waiting', queueNumber:4,  arrivedAt:'09:00' },
-  // Pediatrics
   { id:'p5',  ticketCode: generateTicket('PED','URGENT',1),   name:'Leo Aquino',      age:3,  sex:'M', chiefComplaints:['High fever 40°C','Febrile seizure'],      category:'URGENT',   clinic:'PED', status:'waiting', queueNumber:1,  arrivedAt:'08:20' },
   { id:'p6',  ticketCode: generateTicket('PED','PRIORITY',1), name:'Ana Bautista',    age:7,  sex:'F', chiefComplaints:['Persistent cough','Mild wheezing'],       category:'PRIORITY', clinic:'PED', status:'waiting', queueNumber:2,  arrivedAt:'08:50' },
   { id:'p7',  ticketCode: generateTicket('PED','REGULAR',1),  name:'Carlo Mendoza',   age:5,  sex:'M', chiefComplaints:['Routine vaccination'],                    category:'REGULAR',  clinic:'PED', status:'waiting', queueNumber:3,  arrivedAt:'09:10' },
-  // OB-GYN
   { id:'p8',  ticketCode: generateTicket('OBG','URGENT',1),   name:'Lina Villanueva', age:28, sex:'F', chiefComplaints:['Vaginal bleeding','Abdominal cramps'],    category:'URGENT',   clinic:'OBG', status:'waiting', queueNumber:1,  arrivedAt:'08:05' },
   { id:'p9',  ticketCode: generateTicket('OBG','PRIORITY',1), name:'Grace Flores',    age:32, sex:'F', chiefComplaints:['Prenatal check-up — 3rd trimester'],      category:'PRIORITY', clinic:'OBG', status:'waiting', queueNumber:2,  arrivedAt:'08:55' },
   { id:'p10', ticketCode: generateTicket('OBG','REGULAR',1),  name:'Luz Tan',         age:45, sex:'F', chiefComplaints:['Pap smear follow-up'],                    category:'REGULAR',  clinic:'OBG', status:'waiting', queueNumber:3,  arrivedAt:'09:05' },
-  // ENT
   { id:'p11', ticketCode: generateTicket('ENT','URGENT',1),   name:'Ramon Garcia',    age:50, sex:'M', chiefComplaints:['Sudden hearing loss','Dizziness'],        category:'URGENT',   clinic:'ENT', status:'waiting', queueNumber:1,  arrivedAt:'08:35' },
   { id:'p12', ticketCode: generateTicket('ENT','PRIORITY',1), name:'Nora Ocampo',     age:39, sex:'F', chiefComplaints:['Nasal polyp obstruction'],                category:'PRIORITY', clinic:'ENT', status:'waiting', queueNumber:2,  arrivedAt:'09:00' },
   { id:'p13', ticketCode: generateTicket('ENT','REGULAR',1),  name:'Ben Navarro',     age:29, sex:'M', chiefComplaints:['Throat irritation','Tonsil swelling'],    category:'REGULAR',  clinic:'ENT', status:'waiting', queueNumber:3,  arrivedAt:'09:20' },
-  // Internal Medicine
   { id:'p14', ticketCode: generateTicket('IM','URGENT',1),    name:'Dolores Lim',     age:70, sex:'F', chiefComplaints:['Chest tightness','Shortness of breath'],  category:'URGENT',   clinic:'IM',  status:'waiting', queueNumber:1,  arrivedAt:'08:00' },
   { id:'p15', ticketCode: generateTicket('IM','PRIORITY',1),  name:'Felix Castro',    age:55, sex:'M', chiefComplaints:['Uncontrolled hypertension','Headache'],   category:'PRIORITY', clinic:'IM',  status:'waiting', queueNumber:2,  arrivedAt:'08:40' },
   { id:'p16', ticketCode: generateTicket('IM','REGULAR',1),   name:'Myra Dela Cruz',  age:48, sex:'F', chiefComplaints:['Diabetes monitoring follow-up'],          category:'REGULAR',  clinic:'IM',  status:'waiting', queueNumber:3,  arrivedAt:'09:15' },
-  // ER
   { id:'p17', ticketCode: 'ER-E-001', name:'Andres Ramos',    age:34, sex:'M', chiefComplaints:['Severe chest pain','Diaphoresis'],          category:'URGENT',   clinic:'ER',  status:'waiting', queueNumber:1,  arrivedAt:'08:02' },
   { id:'p18', ticketCode: 'ER-E-002', name:'Cynthia Rojas',   age:21, sex:'F', chiefComplaints:['RTA — head trauma','LOC episode'],          category:'URGENT',   clinic:'ER',  status:'waiting', queueNumber:2,  arrivedAt:'08:18' },
   { id:'p19', ticketCode: 'ER-E-003', name:'Mario Dela Vega', age:65, sex:'M', chiefComplaints:['Stroke symptoms — facial droop'],           category:'URGENT',   clinic:'ER',  status:'waiting', queueNumber:3,  arrivedAt:'08:44' },
 ];
-
-// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const CAT_ORDER: Category[] = ['URGENT', 'PRIORITY', 'REGULAR'];
 
@@ -98,8 +90,6 @@ function sortQueue(patients: Patient[]): Patient[] {
 function now(): string {
   return new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
 }
-
-// ─── Sub-components ───────────────────────────────────────────────────────────
 
 function PatientCard({ patient, onServe, onDone, isServing }: {
   patient: Patient;
@@ -152,7 +142,7 @@ function NowServingBanner({ patient, canFinish, onFinish }: { patient: Patient |
       <div className="flex flex-col sm:flex-row sm:items-center gap-4">
         <div className={`text-center rounded-2xl ${cat.bg} px-6 py-4 min-w-[120px]`}>
           <p className="text-3xl font-black text-white tracking-widest">{patient.ticketCode}</p>
-          <p className={`mt-1 text-xs font-bold text-white/80`}>{cat.label}</p>
+          <p className="mt-1 text-xs font-bold text-white/80">{cat.label}</p>
         </div>
         <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
           <div>
@@ -188,13 +178,10 @@ function NowServingBanner({ patient, canFinish, onFinish }: { patient: Patient |
   );
 }
 
-// ─── Clinic Dashboard ─────────────────────────────────────────────────────────
-
-function ClinicQueue({ clinic, allPatients, onUpdate, onLogout }: {
+function ClinicQueue({ clinic, allPatients, onUpdate }: {
   clinic: Clinic;
   allPatients: Patient[];
   onUpdate: (patients: Patient[]) => void;
-  onLogout: () => void;
 }) {
   const myPatients = allPatients.filter(p => p.clinic === clinic.code && p.status !== 'done');
   const serving = myPatients.find(p => p.status === 'serving') ?? null;
@@ -220,7 +207,19 @@ function ClinicQueue({ clinic, allPatients, onUpdate, onLogout }: {
   function handleServe(patient: Patient) {
     const updated = allPatients.map(p => {
       if (p.id === patient.id) return { ...p, status: 'serving' as const };
-      if (p.clinic === clinic.code && p.status === 'serving') return { ...p, status: 'done' as const, completedAt: new Date().toLocaleString('en-PH', { month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) };
+      if (p.clinic === clinic.code && p.status === 'serving') {
+        return {
+          ...p,
+          status: 'done' as const,
+          completedAt: new Date().toLocaleString('en-PH', {
+            month: '2-digit',
+            day: '2-digit',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+        };
+      }
       return p;
     });
     onUpdate(updated);
@@ -228,7 +227,20 @@ function ClinicQueue({ clinic, allPatients, onUpdate, onLogout }: {
 
   function handleDone(patient: Patient) {
     const updated = allPatients.map(p =>
-      p.id === patient.id ? { ...p, status: 'done' as const, completedAt: p.completedAt ?? new Date().toLocaleString('en-PH', { month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' }) } : p
+      p.id === patient.id
+        ? {
+            ...p,
+            status: 'done' as const,
+            completedAt:
+              p.completedAt ?? new Date().toLocaleString('en-PH', {
+                month: '2-digit',
+                day: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+          }
+        : p
     );
     onUpdate(updated);
   }
@@ -237,14 +249,13 @@ function ClinicQueue({ clinic, allPatients, onUpdate, onLogout }: {
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
-      {/* Header */}
       <header className={`sticky top-0 z-20 border-b ${isER ? 'border-red-800 bg-red-950' : 'border-slate-700 bg-slate-900/95'} backdrop-blur-sm`}>
         <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-2.5 h-8 rounded-full ${isER ? 'bg-red-500' : 'bg-cyan-500'}`} />
             <div>
               <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">NMMC · BICA</p>
-              <h1 className="text-xl font-black text-white">{clinic.name} Clinic Dashboard </h1>
+              <h1 className="text-xl font-black text-white">{clinic.name} Clinic Dashboard</h1>
             </div>
           </div>
           <div className="flex items-center gap-3">
@@ -280,14 +291,12 @@ function ClinicQueue({ clinic, allPatients, onUpdate, onLogout }: {
       </header>
 
       <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
-        {/* Now Serving */}
         <NowServingBanner
           patient={serving}
           canFinish={!!serving && waiting.length === 0}
           onFinish={() => { if (serving) handleDone(serving); }}
         />
 
-        {/* Queue by category */}
         {CAT_ORDER.filter(cat => isER ? cat === 'URGENT' : true).map(cat => {
           const group = grouped[cat];
           const style = CAT_STYLE[cat];
@@ -330,14 +339,11 @@ function ClinicQueue({ clinic, allPatients, onUpdate, onLogout }: {
   );
 }
 
-// ─── Login Screen ─────────────────────────────────────────────────────────────
-
 function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => string | null }) {
   const [staffId, setStaffId] = useState('');
   const [staffCode, setStaffCode] = useState('');
   const [error, setError] = useState('');
   const [showCode, setShowCode] = useState(false);
-  const [showCreds, setShowCreds] = useState(false);
   const [time, setTime] = useState(now());
 
   useEffect(() => {
@@ -353,7 +359,6 @@ function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => strin
 
   return (
     <div className="min-h-screen bg-slate-900 flex flex-col items-center justify-center px-4">
-      {/* Logo */}
       <div className="mb-8 text-center">
         <div className="inline-flex items-center justify-center w-20 h-20 rounded-3xl bg-cyan-950 border-2 border-cyan-600 mb-4">
           <span className="text-3xl font-black text-cyan-400">B</span>
@@ -411,12 +416,10 @@ function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => strin
         >
           Access Dashboard →
         </button>
-        </div>
       </div>
+    </div>
   );
 }
-
-// ─── Root ─────────────────────────────────────────────────────────────────────
 
 interface ClinicDashboardProps {
   onBack: () => void;
@@ -445,17 +448,14 @@ export default function ClinicDashboard({ onBack }: ClinicDashboardProps) {
     setRecentlyDone([]);
   }
 
-  // Track transitions to 'done' and show them in a sidebar
   const prevPatientsRef = React.useRef<Map<string, string>>(new Map());
 
-  React.useEffect(() => {
+  useEffect(() => {
     const prevMap = prevPatientsRef.current;
     const nowDone = patients.filter(p => p.status === 'done' && prevMap.get(p.id) !== 'done');
-
     if (nowDone.length > 0) {
       setRecentlyDone(prev => [...nowDone, ...prev]);
     }
-
     const newMap = new Map<string, string>();
     patients.forEach(p => newMap.set(p.id, p.status));
     prevPatientsRef.current = newMap;
@@ -467,20 +467,14 @@ export default function ClinicDashboard({ onBack }: ClinicDashboardProps) {
         <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="lg:col-span-2">
             <div className="mb-6">
-              <h2 className="text-3xl font-black text-white">OPD Specialized Clinic </h2>
-              <p className="text-sm text-slate-400">Streamlining Patient Intake </p>
+              <h2 className="text-3xl font-black text-white">OPD Specialized Clinic</h2>
+              <p className="text-sm text-slate-400">Streamlining Patient Intake</p>
             </div>
-            <ClinicQueue
-              clinic={activeClinic}
-              allPatients={patients}
-              onUpdate={setPatients}
-              onLogout={handleLogout}
-            />
+            <ClinicQueue clinic={activeClinic} allPatients={patients} onUpdate={setPatients} />
           </div>
 
           <aside className="lg:col-span-1">
             <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4 sticky top-6 space-y-4">
-            
               <div>
                 <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">Recently Completed</p>
                 <p className="mt-1 text-3xl font-black text-white">{recentlyDone.length}</p>

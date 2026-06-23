@@ -5,7 +5,6 @@ interface HospitalNumberProps {
   onBack?: () => void;
   onProceed?: (values: {
     hospitalNumber: string;
-    philhealthId: string;
     lastName: string;
     firstName: string;
     middleName: string;
@@ -14,6 +13,11 @@ interface HospitalNumberProps {
     gender: string;
     contactNumber: string;
     purpose: string;
+    completeAddress: string;
+    birthplace: string;
+    religion: string;
+    civilStatus: string;
+    appointmentStatus: string;
   }) => void;
 }
 
@@ -62,7 +66,6 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
               const formData = new FormData(event.currentTarget);
               onProceed?.({
                 hospitalNumber: (formData.get("hospitalNumber") as string) ?? "",
-                philhealthId: (formData.get("philhealthId") as string) ?? "",
                 lastName: (formData.get("lastName") as string) ?? "",
                 firstName: (formData.get("firstName") as string) ?? "",
                 middleName: (formData.get("middleName") as string) ?? "",
@@ -71,6 +74,11 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
                 gender: (formData.get("gender") as string) ?? "",
                 contactNumber: (formData.get("contactNumber") as string) ?? "",
                 purpose: (formData.get("purpose") as string) ?? "",
+                completeAddress: (formData.get("completeAddress") as string) ?? "",
+                birthplace: (formData.get("birthplace") as string) ?? "",
+                religion: (formData.get("religion") as string) ?? "",
+                civilStatus: (formData.get("civilStatus") as string) ?? "",
+                appointmentStatus: (formData.get("appointmentStatus") as string) ?? "",
               });
             }}
             className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]"
@@ -80,7 +88,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Hospital Number (HN) 
+                Hospital Number (HN)
               </label>
               <input
                 name="hospitalNumber"
@@ -91,15 +99,16 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
               <p className="text-[0.75rem] text-cyan-400">Found on your NMMC ID card or previous prescription.</p>
             </section>
 
-            <section className="flex flex-col gap-[0.25rem] flex-1">
-              <label className="text-[1.1rem] font-semibold text-white">PhilHealth ID No.</label>
-              <input
-                name="philhealthId"
-                type="text"
-                placeholder="e.g. 00-000000000-0"
+            <section className="flex flex-col gap-[0.25rem] w-[17rem]">
+              <label className="text-[1.1rem] font-semibold text-white">Appointment Status</label>
+              <select
+                name="appointmentStatus"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
-              />
-              <p className="text-[0.75rem] text-cyan-400">Use this if you do not have your HN card.</p>
+              >
+                <option value="">— select —</option>
+                <option>With appointment</option>
+                <option>Without appointment</option>
+              </select>
             </section>
 
           </div>
@@ -148,7 +157,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Birthdate 
+                Birthdate
               </label>
               <input
                 name="birthdate"
@@ -160,7 +169,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
 
             <section className="flex flex-col gap-[0.25rem] w-[8rem]">
               <label className="text-[1.1rem] font-semibold text-white">
-                Age 
+                Age
               </label>
               <input
                 name="age"
@@ -174,7 +183,7 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Sex 
+                Sex
               </label>
               <select
                 name="gender"
@@ -188,7 +197,60 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
 
           </div>
 
-          {/* ── ROW 4: Contact Number | Purpose of Visit ── */}
+          {/* ── ROW 4: Birthplace | Religion | Civil Status ── */}
+          <div className="flex flex-row justify-evenly gap-[1rem]">
+
+            <section className="flex flex-col gap-[0.25rem] flex-1">
+              <label className="text-[1.1rem] font-semibold text-white">Birthplace</label>
+              <input
+                name="birthplace"
+                type="text"
+                placeholder="e.g. Cagayan de Oro"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </section>
+
+            <section className="flex flex-col gap-[0.25rem] flex-1">
+              <label className="text-[1.1rem] font-semibold text-white">Religion</label>
+              <input
+                name="religion"
+                type="text"
+                placeholder="e.g. Roman Catholic"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </section>
+
+            <section className="flex flex-col gap-[0.25rem] flex-1">
+              <label className="text-[1.1rem] font-semibold text-white">Civil Status</label>
+              <select
+                name="civilStatus"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              >
+                <option value="">— select —</option>
+                <option>Single</option>
+                <option>Married</option>
+                <option>Widowed</option>
+                <option>Separated</option>
+                <option>Divorced</option>
+              </select>
+            </section>
+
+          </div>
+
+          {/* ── ROW 5: Complete Address ── */}
+          <div className="flex flex-row gap-[1rem]">
+            <section className="flex flex-col gap-[0.25rem] flex-1">
+              <label className="text-[1.1rem] font-semibold text-white">Complete Address</label>
+              <input
+                name="completeAddress"
+                type="text"
+                placeholder="e.g. House No., Street, Barangay, City, Province"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </section>
+          </div>
+
+          {/* ── ROW 6: Contact Number | Purpose of Visit ── */}
           <div className="flex flex-row justify-evenly gap-[1rem]">
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
@@ -206,19 +268,15 @@ export default function hospitalNumber({ onBack, onProceed }: HospitalNumberProp
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
               <label className="text-[1.1rem] font-semibold text-white">
-                Purpose of Visit 
+                Purpose of Visit
               </label>
               <select
                 name="purpose"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               >
                 <option value="">— select —</option>
-                <option>OPD check-in / follow-up</option>
-                <option>Lab / diagnostic result</option>
-                <option>Pharmacy</option>
-                <option>Billing / cashier</option>
-                <option>Medical certificate request</option>
-                <option>Other</option>
+                <option>Check up</option>
+                <option>Follow up</option>
               </select>
             </section>
 

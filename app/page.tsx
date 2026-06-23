@@ -20,24 +20,34 @@ type ViewMode = "selector" | "kiosk" | "dashboard";
 type VitalStage = "bp" | "oximetry" | "temperature";
 
 const ModeSelector = ({ onSelect }: { onSelect: (mode: "kiosk" | "dashboard") => void }) => (
-  <div className="min-h-screen flex flex-col items-center justify-center gap-6 px-6 py-12 bg-cyan-950 text-white">
-    <h1 className="text-5xl font-bold">BICA Access</h1>
-    <p className="max-w-2xl text-center text-lg text-cyan-100">
-      Select how you want to continue: patient kiosk self-triage or the clinic dashboard.
-    </p>
-    <div className="flex flex-col sm:flex-row gap-4">
-      <button
-        onClick={() => onSelect("kiosk")}
-        className="rounded-xl bg-orange-400 px-8 py-4 text-xl font-semibold text-cyan-950 hover:bg-orange-300"
-      >
-        Patient Kiosk
-      </button>
-      <button
-        onClick={() => onSelect("dashboard")}
-        className="rounded-xl border border-white/40 bg-transparent px-8 py-4 text-xl font-semibold text-white hover:bg-white/10"
-      >
-        Clinic Dashboard
-      </button>
+  <div className="min-h-screen relative flex flex-col items-center justify-center gap-6 px-6 py-12 text-white"
+    style={{
+      backgroundImage: "url('/bg3.jpg')",
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+      backgroundRepeat: 'no-repeat',
+    }}
+  >
+    <div className="absolute inset-0 bg-slate-950/85" />
+    <div className="relative z-10 flex flex-col items-center justify-center gap-6">
+      <h1 className="text-5xl font-bold">BICA Access</h1>
+      <p className="max-w-2xl text-center text-lg text-cyan-100">
+        Select how you want to continue: patient kiosk self-triage or the clinic dashboard.
+      </p>
+      <div className="flex flex-col sm:flex-row gap-4">
+        <button
+          onClick={() => onSelect("kiosk")}
+          className="rounded-xl bg-orange-400 px-8 py-4 text-xl font-semibold text-cyan-950 hover:bg-orange-300"
+        >
+          Patient Kiosk
+        </button>
+        <button
+          onClick={() => onSelect("dashboard")}
+          className="rounded-xl border border-white/40 bg-transparent px-8 py-4 text-xl font-semibold text-white hover:bg-white/10"
+        >
+          Clinic Dashboard
+        </button>
+      </div>
     </div>
   </div>
 );
@@ -51,11 +61,14 @@ type PatientInfo = {
   age: string;
   gender: string;
   address: string;
+  birthplace: string;
+  religion: string;
+  civilStatus: string;
+  appointmentStatus: string;
 };
 
 type ReturningInfo = {
   hospitalNumber: string;
-  philhealthId: string;
   lastName: string;
   firstName: string;
   middleName: string;
@@ -64,6 +77,11 @@ type ReturningInfo = {
   gender: string;
   contactNumber: string;
   purpose: string;
+  completeAddress: string;
+  birthplace: string;
+  religion: string;
+  civilStatus: string;
+  appointmentStatus: string;
 };
 
 type ReferralInfo = {
@@ -152,10 +170,13 @@ export default function Home() {
     age: "",
     gender: "",
     address: "",
+    birthplace: "",
+    religion: "",
+    civilStatus: "",
+    appointmentStatus: "",
   });
   const [returningInfo, setReturningInfo] = useState<ReturningInfo>({
     hospitalNumber: "",
-    philhealthId: "",
     lastName: "",
     firstName: "",
     middleName: "",
@@ -164,6 +185,11 @@ export default function Home() {
     gender: "",
     contactNumber: "",
     purpose: "",
+    completeAddress: "",
+    birthplace: "",
+    religion: "",
+    civilStatus: "",
+    appointmentStatus: "",
   });
   const [referralInfo, setReferralInfo] = useState<ReferralInfo>({
     referringFacility: "",
@@ -202,8 +228,8 @@ export default function Home() {
       setSelectedCategory(null);
       setSelectedClinic(null);
       setVitalStage("bp");
-      setPatientInfo({ lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "", gender: "", address: "" });
-      setReturningInfo({ hospitalNumber: "", philhealthId: "", lastName: "", firstName: "", middleName: "", birthdate: "", age: "", gender: "", contactNumber: "", purpose: "" });
+      setPatientInfo({ lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "", gender: "", address: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
+      setReturningInfo({ hospitalNumber: "", lastName: "", firstName: "", middleName: "", birthdate: "", age: "", gender: "", contactNumber: "", purpose: "", completeAddress: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
       setReferralInfo({ referringFacility: "", facilityType: "", referringDoctor: "", referringContact: "", referralDate: "", referralDiagnosis: "", referralPurpose: "", interventions: "", referralFormNo: "" });
       setVitals({ bpSys: "", bpDia: "", hr: "", spo2: "", temperature: "" });
       setTriageSelection({ groupLabel: "", ccLabel: "", subLabel: "", clinic: "Family Medicine", systemValue: "", answers: {} });
@@ -325,8 +351,8 @@ export default function Home() {
     setSelectedCategory(null);
     setSelectedClinic(null);
     setVitalStage("bp");
-    setPatientInfo({ lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "", gender: "", address: "" });
-    setReturningInfo({ hospitalNumber: "", philhealthId: "", lastName: "", firstName: "", middleName: "", birthdate: "", age: "", gender: "", contactNumber: "", purpose: "" });
+    setPatientInfo({ lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "", gender: "", address: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
+    setReturningInfo({ hospitalNumber: "", lastName: "", firstName: "", middleName: "", birthdate: "", age: "", gender: "", contactNumber: "", purpose: "", completeAddress: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
     setReferralInfo({ referringFacility: "", facilityType: "", referringDoctor: "", referringContact: "", referralDate: "", referralDiagnosis: "", referralPurpose: "", interventions: "", referralFormNo: "" });
     setVitals({ bpSys: "", bpDia: "", hr: "", spo2: "", temperature: "" });
     setTriageSelection({ groupLabel: "", ccLabel: "", subLabel: "", clinic: "Family Medicine", systemValue: "", answers: {} });
@@ -346,16 +372,30 @@ export default function Home() {
 
   const age = selectedCategory === "old" ? returningInfo.age : selectedCategory === "new" ? patientInfo.age : "";
   const gender = selectedCategory === "old" ? returningInfo.gender : selectedCategory === "new" ? patientInfo.gender : "";
-  const patientAddress = selectedCategory === "new" ? patientInfo.address : "";
+  const patientAddress = selectedCategory === "old"
+    ? returningInfo.completeAddress
+    : selectedCategory === "new"
+      ? patientInfo.address
+      : "";
   const pwdStatus = selectedCategory === "new" ? patientInfo.pwdStatus : "";
   const complaints = triageSelection.subLabel || triageSelection.ccLabel || triageSelection.groupLabel || "No chief complaint selected";
   const clinic = selectedClinic ?? triageSelection.clinic ?? "Family Medicine";
 
   return (
-    <div className="w-auto h-auto">
-      {viewMode === "selector" && (
-        operatorAuthenticated ? <ModeSelector onSelect={handleSelectMode} /> : <OperatorLogin onLogin={handleOperatorLogin} />
-      )}
+    <div
+      className="min-h-screen w-full relative"
+      style={{
+        backgroundImage: "url('/bg3.jpg')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-slate-950/85" />
+      <div className="relative">
+        {viewMode === "selector" && (
+          operatorAuthenticated ? <ModeSelector onSelect={handleSelectMode} /> : <OperatorLogin onLogin={handleOperatorLogin} />
+        )}
       {viewMode === "selector" && operatorAuthenticated && (
         <div className="fixed top-4 right-4">
           <button onClick={handleOperatorLogout} className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white">Log out</button>
@@ -447,6 +487,7 @@ export default function Home() {
       )}
         </>
       )}
+      </div>
     </div>
   );
 }

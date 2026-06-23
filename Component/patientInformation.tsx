@@ -12,6 +12,10 @@ interface PatientInformationProps {
     age: string;
     gender: string;
     address: string;
+    birthplace: string;
+    religion: string;
+    civilStatus: string;
+    appointmentStatus: string;
   }) => void;
 }
 
@@ -67,6 +71,10 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
                 age: (formData.get("age") as string) ?? "",
                 gender: (formData.get("gender") as string) ?? "",
                 address: (formData.get("address") as string) ?? "",
+                birthplace: (formData.get("birthplace") as string) ?? "",
+                religion: (formData.get("religion") as string) ?? "",
+                civilStatus: (formData.get("civilStatus") as string) ?? "",
+                appointmentStatus: (formData.get("appointmentStatus") as string) ?? "",
               });
             }}
             className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]"
@@ -156,17 +164,69 @@ export default function patientInformation({ onBack, onProceed }: PatientInforma
 
           </div>
 
-          {/* ── ROW 3: Address ── */}
-          <div className="flex flex-row gap-[1rem]">
+          {/* ── ROW 3: Birthplace | Religion | Civil Status ── */}
+          <div className="flex flex-row justify-evenly gap-[1rem]">
 
             <section className="flex flex-col gap-[0.25rem] flex-1">
-              <label className="text-[1.1rem] font-semibold text-white">Address</label>
+              <label className="text-[1.1rem] font-semibold text-white">Birthplace</label>
+              <input
+                name="birthplace"
+                type="text"
+                placeholder="e.g. Cagayan de Oro"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </section>
+
+            <section className="flex flex-col gap-[0.25rem] flex-1">
+              <label className="text-[1.1rem] font-semibold text-white">Religion</label>
+              <input
+                name="religion"
+                type="text"
+                placeholder="e.g. Roman Catholic"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              />
+            </section>
+
+            <section className="flex flex-col gap-[0.25rem] flex-1">
+              <label className="text-[1.1rem] font-semibold text-white">Civil Status</label>
+              <select
+                name="civilStatus"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              >
+                <option value="">— select —</option>
+                <option>Single</option>
+                <option>Married</option>
+                <option>Widowed</option>
+                <option>Separated</option>
+                <option>Divorced</option>
+              </select>
+            </section>
+
+          </div>
+
+          {/* ── ROW 4: Complete Address — Appointment Status ── */}
+          <div className="flex flex-row justify-evenly gap-[1rem]">
+
+            <section className="flex flex-col gap-[0.25rem] flex-1">
+              <label className="text-[1.1rem] font-semibold text-white">Complete Address</label>
               <input
                 name="address"
                 type="text"
                 placeholder="e.g. House No., Street, Barangay, City, Province"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
+            </section>
+
+            <section className="flex flex-col gap-[0.25rem] w-[17rem]">
+              <label className="text-[1.1rem] font-semibold text-white">Appointment Status</label>
+              <select
+                name="appointmentStatus"
+                className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+              >
+                <option value="">— select —</option>
+                <option>With appointment</option>
+                <option>Without appointment</option>
+              </select>
             </section>
 
           </div>

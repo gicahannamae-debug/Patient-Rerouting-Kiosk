@@ -17,8 +17,17 @@ export default function OperatorLogin({ onLogin }: { onLogin: () => void }) {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-cyan-950 text-white px-4">
-      <div className="w-full max-w-sm rounded-2xl bg-slate-800/60 border border-slate-700 p-6">
+    <div
+      className="min-h-screen relative flex items-center justify-center px-4"
+      style={{
+        backgroundImage: "url('/bg3.jpg')",
+        backgroundSize: 'cover',
+        backgroundPosition: 'center',
+        backgroundRepeat: 'no-repeat',
+      }}
+    >
+      <div className="absolute inset-0 bg-slate-950/82" />
+      <div className="relative w-full max-w-sm rounded-2xl bg-slate-800/78 border border-slate-700 p-6 shadow-2xl backdrop-blur-md">
         <h2 className="text-lg font-bold mb-2">Operator Login</h2>
         <p className="text-sm text-slate-400 mb-4">Sign in to access mode selector.</p>
 
