@@ -1,219 +1,349 @@
 'use client'
-import React from "react";
+import React, { useState } from "react";
+
+export type ServiceWorkflowType = 'referred' | 'diagnostics' | 'followup';
 
 interface ReferralDetailsProps {
   onBack?: () => void;
-  onProceed?: (values: {
-    referringFacility: string;
-    facilityType: string;
-    referringDoctor: string;
-    referringContact: string;
-    referralDate: string;
-    referralDiagnosis: string;
-    referralPurpose: string;
-    interventions: string;
-    referralFormNo: string;
-  }) => void;
+  onProceed?: (values: Record<string, string>) => void;
 }
 
-export default function referralDetails({ onBack, onProceed }: ReferralDetailsProps) {
-  return (
+export default function ReferralDetails({ onBack, onProceed }: ReferralDetailsProps) {
+  // Toggle between Referral Consult and Direct Diagnostic Service
+  const [serviceType, setServiceType] = useState<ServiceWorkflowType>('referred');
 
-    <div className="">
+  return (
+    <div className="w-full min-h-screen bg-cyan-950 flex flex-col font-sans antialiased selection:bg-yellow-200">
 
       {/* ── NAV ── */}
-      <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-yellow-50">
-        <div className="container mx-auto flex items-center justify-between">
+      <nav className="w-full px-8 py-4 text-cyan-950 bg-yellow-50 shadow-lg border-b border-yellow-100 flex items-center justify-between">
+        <div className="flex flex-col">
+          <h1 className="text-2xl font-black tracking-wider text-cyan-950">BICA</h1>
+          <p className="text-xs font-medium tracking-wide uppercase text-cyan-800/80">Better Informed Care Access</p>
+        </div>
 
-          <div className="flex flex-col">
-            <h1 className="text-2xl font-bold">BICA</h1>
-            <p className="w-full">Better Informed Care Access</p>
-          </div>
-
-          <div className="pr-[2rem]">
-            <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
-              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Triage Form |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
-            </ul>
-            <div className="md:hidden">
-              <a className="text-4xl font-semibold" href="#">&#8801;</a>
-            </div>
-          </div>
-
+        <div className="flex items-center">
+          <ul className="flex space-x-8 text-lg font-bold text-cyan-900/90">
+            <li><a href="#" className="cursor-pointer hover:text-cyan-600 transition-colors duration-200">Triage Form</a></li>
+            <li className="text-cyan-200 font-light">|</li>
+            <li><a href="#" className="cursor-pointer hover:text-cyan-600 transition-colors duration-200">Vital Signs</a></li>
+            <li className="text-cyan-200 font-light">|</li>
+            <li><a href="#" className="cursor-pointer hover:text-cyan-600 transition-colors duration-200">Chief Complaints</a></li>
+            <li className="text-cyan-200 font-light">|</li>
+            <li><a href="#" className="cursor-pointer hover:text-cyan-600 transition-colors duration-200">Summary</a></li>
+          </ul>
         </div>
       </nav>
 
       {/* ── MAIN ── */}
-      <div className="min-h-screen flex flex-col gap-[1.5rem] items-center justify-center bg-cyan-950 py-[3rem]">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 space-y-6 my-4">
 
         {/* Header */}
-        <div className="flex flex-col text-center justify-center">
-          <h1 className="text-[3rem] font-bold text-white">Referral Details</h1>
-          <p className="text-[1.7rem] font-serif text-white">Please fill-up all necessary information.</p>
+        <div className="text-center space-y-2">
+          <h1 className="text-4xl md:text-5xl font-black tracking-tight text-white drop-shadow-sm">
+            Service & Referral Details
+          </h1>
+          <p className="text-lg md:text-xl font-medium text-cyan-200/70 tracking-wide">
+            Select service type and provide request details.
+          </p>
+        </div>
+
+        {/* ── WORKFLOW TYPE TOGGLE ── */}
+        <div className="flex gap-4 bg-cyan-900/60 p-2 rounded-xl border border-cyan-800/80 max-w-3xl w-full">
+          <button
+            type="button"
+            onClick={() => setServiceType('referred')}
+            className={`flex-1 py-3 px-4 rounded-lg font-bold text-base transition-all ${
+              serviceType === 'referred'
+                ? 'bg-yellow-50 text-cyan-950 shadow-md scale-[1.02]'
+                : 'text-white/70 hover:text-white hover:bg-cyan-800/50'
+            }`}
+          >
+            📋 External Referral / Consult
+          </button>
+          <button
+            type="button"
+            onClick={() => setServiceType('diagnostics')}
+            className={`flex-1 py-3 px-4 rounded-lg font-bold text-base transition-all ${
+              serviceType === 'diagnostics'
+                ? 'bg-yellow-50 text-cyan-950 shadow-md scale-[1.02]'
+                : 'text-white/70 hover:text-white hover:bg-cyan-800/50'
+            }`}
+          >
+            🔬 Lab & Diagnostics Only
+          </button>
+          <button
+            type="button"
+            onClick={() => setServiceType('followup')}
+            className={`flex-1 py-3 px-4 rounded-lg font-bold text-base transition-all ${
+              serviceType === 'followup'
+                ? 'bg-yellow-50 text-cyan-950 shadow-md scale-[1.02]'
+                : 'text-white/70 hover:text-white hover:bg-cyan-800/50'
+            }`}
+          >
+            🩺 Clinic Follow-Up
+          </button>
         </div>
 
         {/* ── FORM CARD ── */}
-          <form
-            onSubmit={(event) => {
-              event.preventDefault();
-              const formData = new FormData(event.currentTarget);
-              onProceed?.({
-                referringFacility: (formData.get("referringFacility") as string) ?? "",
-                facilityType: (formData.get("facilityType") as string) ?? "",
-                referringDoctor: (formData.get("referringDoctor") as string) ?? "",
-                referringContact: (formData.get("referringContact") as string) ?? "",
-                referralDate: (formData.get("referralDate") as string) ?? "",
-                referralDiagnosis: (formData.get("referralDiagnosis") as string) ?? "",
-                referralPurpose: (formData.get("referralPurpose") as string) ?? "",
-                interventions: (formData.get("interventions") as string) ?? "",
-                referralFormNo: (formData.get("referralFormNo") as string) ?? "",
-              });
-            }}
-            className="flex flex-col gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]"
-          >
-          {/* ── ROW 1: Referring Facility | Facility Type ── */}
-          <div className="flex flex-row justify-evenly gap-[1rem]">
+        <form
+          onSubmit={(event) => {
+            event.preventDefault();
+            const formData = new FormData(event.currentTarget);
+            const data: Record<string, string> = { serviceWorkflow: serviceType };
+            formData.forEach((value, key) => {
+              data[key] = value.toString();
+            });
+            onProceed?.(data);
+          }}
+          className="flex flex-col gap-6 bg-cyan-900 p-8 rounded-2xl max-w-4xl w-full border border-cyan-800/60 shadow-2xl"
+        >
+          {/* ══════════════ OPTION A: REFERRED PATIENT ══════════════ */}
+          {serviceType === 'referred' && (
+            <>
+              <div className="border-b border-cyan-800 pb-2">
+                <span className="text-yellow-300 font-bold text-sm tracking-wider uppercase">
+                  Route: Vital Signs → Triage Nurse → Doctor Consultation
+                </span>
+              </div>
 
-            <section className="flex flex-col gap-[0.25rem] flex-1">
-              <label className="text-[1.1rem] font-semibold text-white">Referring Hospital / Clinic</label>
-              <input
-                name="referringFacility"
-                type="text"
-                placeholder="e.g. Bukidnon Provincial Hospital"
-                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-              />
-            </section>
+              {/* Row 1 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Referring Hospital / Clinic *</label>
+                  <input
+                    required
+                    name="referringFacility"
+                    type="text"
+                    placeholder="e.g. Bukidnon Provincial Hospital"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Facility Level / Type</label>
+                  <select
+                    name="facilityType"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  >
+                    <option value="">— Select facility type —</option>
+                    <option>Barangay Health Station (BHS)</option>
+                    <option>Rural Health Unit (RHU) / Health Center</option>
+                    <option>District / Primary Hospital</option>
+                    <option>Provincial Hospital</option>
+                    <option>Private Clinic / Hospital</option>
+                  </select>
+                </div>
+              </div>
 
-            <section className="flex flex-col gap-[0.25rem] flex-1">
-              <label className="text-[1.1rem] font-semibold text-white">Facility Type</label>
-              <select
-                name="facilityType"
-                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-              >
-                <option value="">— select —</option>
-                <option>Barangay Health Center</option>
-                <option>Rural Health Unit (RHU)</option>
-                <option>District Hospital</option>
-                <option>Provincial Hospital</option>
-                <option>Private Hospital / Clinic</option>
-                <option>Other</option>
-              </select>
-            </section>
+              {/* Row 2 */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Referring Doctor</label>
+                  <input
+                    name="referringDoctor"
+                    type="text"
+                    placeholder="Dr. Juan Dela Cruz"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Doctor / Clinic Contact</label>
+                  <input
+                    name="referringContact"
+                    type="tel"
+                    placeholder="09XX-XXX-XXXX"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Target Specialty Clinic *</label>
+                  <select
+                    required
+                    name="targetSpecialty"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  >
+                    <option value="">— Select specialty —</option>
+                    <option>Internal Medicine</option>
+                    <option>Pediatrics</option>
+                    <option>Obstetrics & Gynecology (OB-GYN)</option>
+                    <option>General Surgery</option>
+                    <option>Orthopedics</option>
+                    <option>Ophthalmology (Eye)</option>
+                    <option>ENT / HNS</option>
+                    <option>Dermatology</option>
+                  </select>
+                </div>
+              </div>
 
-          </div>
+              {/* Row 3 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Admitting / Working Diagnosis *</label>
+                  <input
+                    required
+                    name="referralDiagnosis"
+                    type="text"
+                    placeholder="e.g. Acute Gastroenteritis with Moderate Dehydration"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Referral Form / Control No.</label>
+                  <input
+                    name="referralFormNo"
+                    type="text"
+                    placeholder="e.g. RF-2026-00412"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
-          {/* ── ROW 2: Referring Doctor | Contact No. | Date of Referral ── */}
-          <div className="flex flex-row justify-evenly gap-[1rem]">
+          {/* ══════════════ OPTION B: DIAGNOSTICS & LABS ══════════════ */}
+          {serviceType === 'diagnostics' && (
+            <>
+              <div className="border-b border-cyan-800 pb-2">
+                <span className="text-emerald-300 font-bold text-sm tracking-wider uppercase">
+                  Route: Direct Queue Ticket → Laboratory / Radiology Desk (Skips Vital Signs)
+                </span>
+              </div>
 
-            <section className="flex flex-col gap-[0.25rem] flex-1">
-              <label className="text-[1.1rem] font-semibold text-white">Referring Doctor</label>
-              <input
-                name="referringDoctor"
-                type="text"
-                placeholder="e.g. Dr. Juan Dela Cruz"
-                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-              />
-            </section>
+              {/* Row 1 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Target Service Department *</label>
+                  <select
+                    required
+                    name="targetDepartment"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  >
+                    <option value="">— Select department —</option>
+                    <option value="lab">Clinical Laboratory (Blood, Urine, Stool)</option>
+                    <option value="xray">Radiology - X-Ray</option>
+                    <option value="ultrasound">Radiology - Ultrasound / CT Scan</option>
+                    <option value="cardio">Cardio-Pulmonary (ECG, 2D-Echo)</option>
+                    <option value="rehab">Physical Therapy / Rehab Medicine</option>
+                  </select>
+                </div>
 
-            <section className="flex flex-col gap-[0.25rem] flex-1">
-              <label className="text-[1.1rem] font-semibold text-white">Doctor's Contact No.</label>
-              <input
-                name="referringContact"
-                type="tel"
-                placeholder="e.g. 09XX-XXX-XXXX"
-                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-              />
-            </section>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Request Type *</label>
+                  <select
+                    required
+                    name="diagnosticRequestType"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  >
+                    <option value="">— Select order status —</option>
+                    <option>Has Doctor's Order Slip / Request Form</option>
+                    <option>Scheduled Appointment / Fasting Exam</option>
+                    <option>Direct Walk-in Testing</option>
+                  </select>
+                </div>
+              </div>
 
-            <section className="flex flex-col gap-[0.25rem] w-[14rem]">
-              <label className="text-[1.1rem] font-semibold text-white">Date of Referral</label>
-              <input
-                name="referralDate"
-                type="date"
-                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-              />
-            </section>
+              {/* Row 2 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Ordering Doctor / Facility</label>
+                  <input
+                    name="orderingPhysician"
+                    type="text"
+                    placeholder="e.g. Dr. Maria Santos / OPD Clinic 3"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Requested Test Name(s)</label>
+                  <input
+                    name="requestedTests"
+                    type="text"
+                    placeholder="e.g. CBC, Urinalysis, Chest X-Ray PA view"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
-          </div>
+          {/* ══════════════ OPTION C: CLINIC FOLLOW-UP ══════════════ */}
+          {serviceType === 'followup' && (
+            <>
+              <div className="border-b border-cyan-800 pb-2">
+                <span className="text-blue-300 font-bold text-sm tracking-wider uppercase">
+                  Route: Vital Signs → Specific Specialty Clinic Queue
+                </span>
+              </div>
 
-          {/* ── ROW 3: Diagnosis | Purpose of Referral ── */}
-          <div className="flex flex-row justify-evenly gap-[1rem]">
+              {/* Row 1 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Target Specialty Clinic *</label>
+                  <select
+                    required
+                    name="followupClinic"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  >
+                    <option value="">— Select clinic —</option>
+                    <option>Internal Medicine Follow-up</option>
+                    <option>Pediatric Subspecialty</option>
+                    <option>OB-GYN / Post-Natal</option>
+                    <option>Post-Operative Surgery</option>
+                    <option>Orthopedic / Fracture Clinic</option>
+                    <option>Hypertension / Diabetes Clinic</option>
+                  </select>
+                </div>
 
-            <section className="flex flex-col gap-[0.25rem] flex-1">
-              <label className="text-[1.1rem] font-semibold text-white">Diagnosis / Chief Complaint from Referring Facility</label>
-              <input
-                name="referralDiagnosis"
-                type="text"
-                placeholder="e.g. Community-acquired pneumonia, severe"
-                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-              />
-            </section>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Attending Physician (If known)</label>
+                  <input
+                    name="attendingDoctor"
+                    type="text"
+                    placeholder="e.g. Dr. Ramos"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+              </div>
 
-            <section className="flex flex-col gap-[0.25rem] flex-1">
-              <label className="text-[1.1rem] font-semibold text-white">Purpose of Referral</label>
-              <select
-                name="referralPurpose"
-                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-              >
-                <option value="">— select —</option>
-                <option>Further management / higher level of care</option>
-                <option>Specialist consultation</option>
-                <option>Diagnostic / laboratory services</option>
-                <option>Surgical intervention</option>
-                <option>ICU / critical care admission</option>
-                <option>Lack of equipment or supplies</option>
-                <option>Patient / family request</option>
-                <option>Other</option>
-              </select>
-            </section>
+              {/* Row 2 */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Hospital ID / Blue Card No.</label>
+                  <input
+                    name="patientHospitalId"
+                    type="text"
+                    placeholder="e.g. NMMC-2025-XXXXX"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-base font-semibold text-white">Last Visit / Appointment Date</label>
+                  <input
+                    name="lastVisitDate"
+                    type="date"
+                    className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
+                  />
+                </div>
+              </div>
+            </>
+          )}
 
-          </div>
-
-          {/* ── ROW 4: Interventions done | Referral Form No. ── */}
-          <div className="flex flex-row justify-evenly gap-[1rem]">
-
-            <section className="flex flex-col gap-[0.25rem] flex-1">
-              <label className="text-[1.1rem] font-semibold text-white">Interventions / Treatments Given Before Referral</label>
-              <input
-                name="interventions"
-                type="text"
-                placeholder="e.g. O2 support started, IV fluids given, medications given"
-                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-              />
-            </section>
-
-            <section className="flex flex-col gap-[0.25rem] w-[14rem]">
-              <label className="text-[1.1rem] font-semibold text-white">Referral Form No.</label>
-              <input
-                name="referralFormNo"
-                type="text"
-                placeholder="e.g. RF-2026-00123"
-                className="text-[1rem] text-cyan-950 border border-stone-300 bg-yellow-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-yellow-300"
-              />
-            </section>
-
-          </div>
-
-          {/* ── BUTTONS — centered, not full width ── */}
-          <div className="flex justify-center gap-[1rem] pt-[0.5rem]">
-
+          {/* ── ACTION BUTTONS ── */}
+          <div className="flex justify-center gap-4 pt-4 border-t border-cyan-800">
             <button
               type="button"
               onClick={() => onBack?.()}
-              className="text-[1.1rem] font-semibold bg-transparent text-yellow-50 border border-yellow-100 px-[2rem] py-[0.6rem] rounded-md hover:bg-cyan-800 cursor-pointer"
+              className="text-base font-bold text-yellow-50 border border-yellow-100/50 px-8 py-3 rounded-lg hover:bg-cyan-800 transition-colors"
             >
               ← Back
             </button>
 
             <button
               type="submit"
-              className="text-[1.3rem] font-semibold bg-yellow-50 text-cyan-950 px-[3rem] py-[0.6rem] rounded-md hover:bg-yellow-100 cursor-pointer"
+              className="text-lg font-bold bg-yellow-50 text-cyan-950 px-10 py-3 rounded-lg hover:bg-yellow-100 shadow-lg transform hover:-translate-y-0.5 active:scale-95 transition-all"
             >
-              Proceed
+              {serviceType === 'diagnostics' ? 'Issue Diagnostic Ticket →' : 'Proceed to Vital Signs →'}
             </button>
-
           </div>
 
         </form>

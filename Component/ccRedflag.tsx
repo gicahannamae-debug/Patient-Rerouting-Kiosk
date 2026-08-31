@@ -7,13 +7,16 @@ interface CcRedflagProps {
 }
 
 export default function CcRedflag({ onBack, onProceed }: CcRedflagProps) {
-  const [isEmergency, setIsEmergency] = useState(false);
+  // Step 0: OPD Welcome & Intro
+  // Step 1: Red Flag Screening Questions
+  // Step 2: Emergency Triggered
+  const [screenStep, setScreenStep] = useState<"welcome" | "screening" | "emergency">("welcome");
   const [alertData, setAlertData] = useState({ symptom: "" });
   const [currentGroupIndex, setCurrentGroupIndex] = useState(0);
 
   const handleGoEmergency = (symptom: string) => {
     setAlertData({ symptom });
-    setIsEmergency(true);
+    setScreenStep("emergency");
 
     if (typeof window !== 'undefined') {
       sessionStorage.setItem('bica_emergency', JSON.stringify({ symptom }));
@@ -59,7 +62,7 @@ export default function CcRedflag({ onBack, onProceed }: CcRedflagProps) {
           symptom: "Uncontrolled heavy bleeding",
         },
         {
-          question: "Are you vomiting blood, or is your stool (tae) bloody, black, or tarry?",
+          question: "Are you vomiting blood, or is your stool bloody, black, or tarry?",
           symptom: "Vomiting blood / bloody or black stool",
         },
         {
@@ -90,143 +93,166 @@ export default function CcRedflag({ onBack, onProceed }: CcRedflagProps) {
       title: "Pregnancy Emergencies",
       items: [
         {
-          question: "If pregnant: Are you experiencing vaginal bleeding or severe stomach pain?",
+          question: "If pregnant: Are you experiencing vaginal bleeding or severe abdominal pain?",
           symptom: "Pregnancy bleeding / severe abdominal pain",
         },
       ],
     },
   ];
 
-  return (
-    <div className="min-h-screen">
+  const currentGroup = redFlagGroups[currentGroupIndex];
+  const isLastGroup = currentGroupIndex === redFlagGroups.length - 1;
 
-      {/* NAV */}
-      <nav className="w-full pl-8 pt-4 pb-4 pr-8 text-cyan-950 bg-yellow-50">
+  return (
+    <div className="min-h-screen bg-cyan-950 flex flex-col justify-between">
+
+      {/* TOP KIOSK HEADER */}
+      <nav className="w-full px-8 py-5 text-cyan-950 bg-yellow-50 shadow-md">
         <div className="w-full flex items-center justify-between">
           <div className="flex flex-col">
-            <h1 className="text-3xl font-bold">BICA</h1>
-            <p className="text-lg">Better Informed Care Access</p>
+            <h1 className="text-4xl font-extrabold tracking-wide">BICA</h1>
+            <p className="text-sm font-semibold tracking-wider uppercase text-cyan-900">
+              Outpatient Department (OPD) Kiosk
+            </p>
           </div>
-          <ul className="md:flex space-x-8 hidden text-xl font-semibold">
-            <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
-            <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
-            <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Chief Complaints |</a></li>
-            <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
-          </ul>
+          <div className="flex items-center gap-3">
+            <span className="h-3 w-3 rounded-full bg-emerald-500 animate-pulse"></span>
+            <span className="text-lg font-bold text-cyan-950">Kiosk Ready</span>
+          </div>
         </div>
       </nav>
 
-      {/* MAIN LAYOUT WRAPPER */}
-      <div className="flex flex-col items-center justify-center py-12 px-6 gap-8 bg-cyan-950 min-h-[calc(100vh-72px)]">
+      {/* STEP 0: WELCOME & SAFETY ACKNOWLEDGMENT */}
+{screenStep === "welcome" && (
+  <div className="flex-1 flex flex-col items-center justify-center px-8 py-16 max-w-5xl mx-auto text-center my-auto w-full">
+    
+    {/* OPD Badge */}
+    <div className="inline-block bg-yellow-400 text-cyan-950 text-xl font-extrabold tracking-widest uppercase px-8 py-3 rounded-full mb-10 border-2 border-yellow-300 shadow-lg">
+      Welcome to the Outpatient Department
+    </div>
 
-        {/* Header */}
-        <div className="text-center w-full">
-          <h2 className="text-7xl font-bold text-white">Safety Check</h2>
-          <p className="text-3xl font-serif text-white mt-2">Are you experiencing any of the following right now?</p>
-        </div>
+    {/* Message & Button Card Wrapper */}
+    <div className="w-full bg-cyan-900/30 border border-cyan-500/30 rounded-3xl p-10 backdrop-blur-sm shadow-2xl flex flex-col items-center gap-10">
+      
+      {/* Safety Message */}
+      <p className="text-3xl sm:text-4xl text-cyan-100 max-w-3xl leading-relaxed font-semibold tracking-wide">
+        For your safety, please answer the questions. <br className="hidden sm:inline" />
+        Tap <span className="font-extrabold text-white underline decoration-yellow-400 underline-offset-8">YES</span> if it applies.
+      </p>
 
-        {/* EMERGENCY SCREEN */}
-        {isEmergency ? (
-          <div className="w-full bg-red-600 border-4 border-white text-white rounded-xl p-10 text-center shadow-2xl animate-pulse">
-            <h3 className="text-5xl font-extrabold mb-4">IMMEDIATE ER REDIRECTION</h3>
-            <p className="text-2xl mb-5">Detected: <span className="font-bold underline">{alertData.symptom}</span></p>
-            <p className="text-3xl font-medium bg-red-950 px-6 py-5 rounded-lg inline-block">
-              Please get your ticket and proceed immediately to the ER!
+      {/* Primary Touch Button */}
+      <button
+        onClick={() => setScreenStep("screening")}
+        className="w-full max-w-2xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-3xl sm:text-4xl font-black py-7 px-10 rounded-2xl shadow-[0_10px_30px_rgba(5,150,105,0.4)] transition-all active:scale-95 border-2 border-emerald-300 flex items-center justify-center gap-6 cursor-pointer tracking-wider"
+      >
+        <span>START SAFETY CHECK</span>
+        <span className="text-4xl sm:text-5xl">→</span>
+      </button>
+
+    </div>
+  </div>
+)}
+      {/* STEP 1: SAFETY SCREENING RED FLAGS */}
+      {screenStep === "screening" && (
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-6xl mx-auto w-full">
+          
+          <div className="text-center w-full mb-6">
+            <h2 className="text-5xl font-bold text-white">Safety Check</h2>
+            <p className="text-2xl text-cyan-200 mt-2">
+              Are you experiencing any of the following right now?
             </p>
-            <button
-              onClick={() => setIsEmergency(false)}
-              className="block mx-auto mt-8 text-base text-red-200 hover:underline opacity-70"
-            >
-              Cancel / Reset Kiosk
-            </button>
           </div>
-        ) : (
-          <>
-            {/* RED FLAG CARD — full width */}
-            <div className="w-full bg-red-950 border-2 border-red-400 rounded-xl p-6 shadow-xl">
 
-              <h3 className="flex items-center gap-2 text-red-300 text-base font-bold uppercase tracking-wider mb-6">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-6 h-6 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <div className="w-full bg-red-950/90 border-2 border-red-500/60 rounded-3xl p-8 shadow-2xl backdrop-blur-sm">
+            
+            <div className="flex items-center justify-between border-b border-red-500/30 pb-4 mb-6">
+              <div className="flex items-center gap-3 text-red-300 font-bold uppercase tracking-wider text-base">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 flex-shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/>
                 </svg>
-                Tap YES on any that apply — you will be directed to the emergency area immediately
-              </h3>
+                <span>Category {currentGroupIndex + 1} of {redFlagGroups.length}: {currentGroup.title}</span>
+              </div>
+              <span className="text-sm text-red-100 bg-red-900 px-4 py-1.5 rounded-full border border-red-600 font-semibold">
+                Tap YES on any that apply
+              </span>
+            </div>
 
-                <div className="space-y-8">
-                <div className="rounded-3xl border border-red-500 bg-red-950/80 p-5 min-h-[480px] flex flex-col justify-between">
-                  <div>
-                    <p className="text-sm text-red-200 uppercase tracking-widest mb-5">
-                      Group {currentGroupIndex + 1} of {redFlagGroups.length}
+            <div className="min-h-[360px] flex flex-col justify-between gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {currentGroup.items.map((flag, itemIndex) => (
+                  <button
+                    key={itemIndex}
+                    onClick={() => handleGoEmergency(flag.symptom)}
+                    className="bg-red-900/70 border border-red-500/50 rounded-2xl p-6 text-left hover:bg-red-700 active:scale-[0.98] transition-all cursor-pointer group flex flex-col justify-between gap-4 min-h-[160px]"
+                  >
+                    <p className="text-red-50 text-2xl font-semibold group-hover:text-white leading-relaxed">
+                      {flag.question}
                     </p>
-                    <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-                      {redFlagGroups[currentGroupIndex].items.map((flag, itemIndex) => (
-                        <button
-                          key={itemIndex}
-                          onClick={() => handleGoEmergency(flag.symptom)}
-                          className="bg-red-800 border border-red-400 rounded-xl p-6 text-left hover:bg-red-700 active:scale-95 transition-all cursor-pointer group flex flex-col justify-between gap-4 min-h-[180px]"
-                        >
-                          <div className="flex flex-col gap-3">
-                            <p className="text-red-100 text-3xl font-semibold group-hover:text-white leading-snug">
-                              {flag.question}
-                            </p>
-                          </div>
-                          <span className="self-end bg-red-600 group-hover:bg-red-500 text-white text-base font-bold px-5 py-2 rounded-md border border-red-300 tracking-wide">
-                            YES →
-                          </span>
-                        </button>
-                      ))}
-                    </div>
-                  </div>
+                    <span className="self-end bg-red-600 group-hover:bg-red-500 text-white text-base font-bold px-6 py-2.5 rounded-xl border border-red-300 tracking-wide flex items-center gap-2">
+                      YES →
+                    </span>
+                  </button>
+                ))}
+              </div>
 
-                  <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-                    <button
-                      type="button"
-                      disabled={currentGroupIndex === 0}
-                      onClick={() => setCurrentGroupIndex((index) => Math.max(0, index - 1))}
-                      className="w-full sm:w-auto text-center bg-transparent border border-white/30 text-white text-base font-semibold py-4 rounded-xl hover:bg-white/10 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                    >
-                      ← Previous group
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (currentGroupIndex === redFlagGroups.length - 1) {
-                          onProceed?.();
-                        } else {
-                          setCurrentGroupIndex((index) => Math.min(redFlagGroups.length - 1, index + 1));
-                        }
-                      }}
-                      className="w-full sm:w-auto text-center bg-[#083344] border-2 border-[#fefce8] text-white text-base font-bold py-4 rounded-xl hover:bg-[#0e4f68] transition-colors"
-                    >
-                      If none apply, proceed
-                    </button>
-                  </div>
-                </div>
+              {/* Group Navigation Controls */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-red-500/30">
+                <button
+                  type="button"
+                  disabled={currentGroupIndex === 0}
+                  onClick={() => setCurrentGroupIndex((index) => Math.max(0, index - 1))}
+                  className="w-full sm:w-auto px-6 py-4 bg-transparent border border-white/30 text-white text-lg font-semibold rounded-xl hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+                >
+                  ← Previous Category
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isLastGroup) {
+                      onProceed?.();
+                    } else {
+                      setCurrentGroupIndex((index) => index + 1);
+                    }
+                  }}
+                  className="w-full sm:w-auto px-8 py-4 bg-cyan-900 border-2 border-cyan-400 text-white text-xl font-bold rounded-xl hover:bg-cyan-800 transition-colors shadow-lg"
+                >
+                  {isLastGroup ? "NONE apply — Proceed to Vital Signs →" : "NONE of these apply"}
+                </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
 
-            {/* Safe Proceed */}
-            <div className="w-full flex flex-col gap-4">
-              {onBack && (
-                <button
-                  onClick={() => onBack?.()}
-                  className="w-full text-center bg-transparent border border-white/30 text-white text-base font-semibold py-4 rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
-                >
-                  ← Back to Vital Signs
-                </button>
-              )}
-
-              <button
-                onClick={() => onProceed?.()}
-                className="w-full text-center bg-[#083344] border-2 border-[#fefce8] text-white text-2xl font-bold py-5 rounded-xl hover:bg-[#0e4f68] transition-colors cursor-pointer block"
-              >
-                None of these apply to me — proceed to summary →
-              </button>
+      {/* STEP 2: EMERGENCY REDIRECTION SCREEN */}
+      {screenStep === "emergency" && (
+        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 max-w-4xl mx-auto text-center my-auto">
+          <div className="w-full bg-red-600 border-4 border-white text-white rounded-3xl p-10 text-center shadow-2xl animate-pulse">
+            <h3 className="text-6xl font-black mb-4 tracking-tight">IMMEDIATE ER REDIRECTION</h3>
+            <p className="text-3xl mb-6">Emergency Symptom Detected: <span className="font-bold underline">{alertData.symptom}</span></p>
+            
+            <div className="bg-red-950 p-6 rounded-2xl border border-red-400 max-w-2xl mx-auto mb-6">
+              <p className="text-3xl font-bold leading-snug">
+                Please step out of line and proceed immediately to the Emergency Room (ER) triage desk!
+              </p>
             </div>
-          </>
-        )}
+            
+            <button
+              onClick={() => setScreenStep("welcome")}
+              className="mt-4 text-lg text-red-100 hover:text-white underline opacity-80 cursor-pointer"
+            >
+              Cancel / Restart Kiosk
+            </button>
+          </div>
+        </div>
+      )}
 
-      </div>
+      {/* FOOTER */}
+      <footer className="w-full py-4 px-8 text-center text-cyan-300/60 text-sm border-t border-cyan-900">
+        BICA Outpatient Self-Service Kiosk • Northern Mindanao Medical Center
+      </footer>
+
     </div>
   );
 }
