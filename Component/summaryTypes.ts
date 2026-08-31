@@ -1,6 +1,13 @@
 'use client';
 
 export type PatientStatus = "new" | "returning" | "referred";
+export type TicketType = "consultation" | "lab" | "followup" | "ancillary" | "emergency";
+
+export type TicketMetadata = {
+  serviceTitle: string;
+  ticketType: TicketType;
+  badgeColor: string;
+};
 
 export type SummaryScreenProps = {
   patientName?: string;
@@ -26,4 +33,5 @@ export type SummaryScreenProps = {
   referralPurpose?: string;
   referralFormNo?: string;
   referralDiagnosis?: string;
+  ticketMetadata?: TicketMetadata;
 };

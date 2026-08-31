@@ -1,16 +1,16 @@
 'use client'
-import React, { useState } from "react";
+import React from "react";
 
 export type ServiceWorkflowType = 'referred' | 'diagnostics' | 'followup';
 
 interface ReferralDetailsProps {
+  selectedServiceType?: ServiceWorkflowType;
   onBack?: () => void;
   onProceed?: (values: Record<string, string>) => void;
 }
 
-export default function ReferralDetails({ onBack, onProceed }: ReferralDetailsProps) {
-  // Toggle between Referral Consult and Direct Diagnostic Service
-  const [serviceType, setServiceType] = useState<ServiceWorkflowType>('referred');
+export default function ReferralDetails({ selectedServiceType, onBack, onProceed }: ReferralDetailsProps) {
+  const serviceType: ServiceWorkflowType = selectedServiceType ?? 'referred';
 
   return (
     <div className="w-full min-h-screen bg-cyan-950 flex flex-col font-sans antialiased selection:bg-yellow-200">
@@ -46,43 +46,6 @@ export default function ReferralDetails({ onBack, onProceed }: ReferralDetailsPr
           <p className="text-lg md:text-xl font-medium text-cyan-200/70 tracking-wide">
             Select service type and provide request details.
           </p>
-        </div>
-
-        {/* ── WORKFLOW TYPE TOGGLE ── */}
-        <div className="flex gap-4 bg-cyan-900/60 p-2 rounded-xl border border-cyan-800/80 max-w-3xl w-full">
-          <button
-            type="button"
-            onClick={() => setServiceType('referred')}
-            className={`flex-1 py-3 px-4 rounded-lg font-bold text-base transition-all ${
-              serviceType === 'referred'
-                ? 'bg-yellow-50 text-cyan-950 shadow-md scale-[1.02]'
-                : 'text-white/70 hover:text-white hover:bg-cyan-800/50'
-            }`}
-          >
-            📋 External Referral / Consult
-          </button>
-          <button
-            type="button"
-            onClick={() => setServiceType('diagnostics')}
-            className={`flex-1 py-3 px-4 rounded-lg font-bold text-base transition-all ${
-              serviceType === 'diagnostics'
-                ? 'bg-yellow-50 text-cyan-950 shadow-md scale-[1.02]'
-                : 'text-white/70 hover:text-white hover:bg-cyan-800/50'
-            }`}
-          >
-            🔬 Lab & Diagnostics Only
-          </button>
-          <button
-            type="button"
-            onClick={() => setServiceType('followup')}
-            className={`flex-1 py-3 px-4 rounded-lg font-bold text-base transition-all ${
-              serviceType === 'followup'
-                ? 'bg-yellow-50 text-cyan-950 shadow-md scale-[1.02]'
-                : 'text-white/70 hover:text-white hover:bg-cyan-800/50'
-            }`}
-          >
-            🩺 Clinic Follow-Up
-          </button>
         </div>
 
         {/* ── FORM CARD ── */}
@@ -235,7 +198,7 @@ export default function ReferralDetails({ onBack, onProceed }: ReferralDetailsPr
                     className="text-base text-cyan-950 border border-stone-300 bg-yellow-50 rounded-lg p-3 focus:outline-none focus:ring-2 focus:ring-yellow-300"
                   >
                     <option value="">— Select order status —</option>
-                    <option>Has Doctor's Order Slip / Request Form</option>
+                    <option>Has Doctor&apos;s Order Slip / Request Form</option>
                     <option>Scheduled Appointment / Fasting Exam</option>
                     <option>Direct Walk-in Testing</option>
                   </select>

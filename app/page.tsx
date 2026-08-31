@@ -1,7 +1,7 @@
 'use client'
-import { useState, useEffect } from "react";
-import WelcomeScreen from "@/Component/welcomeScreen";
-import PatientCategory, { PatientCategoryType } from "@/Component/patientCategory";
+import { useState } from "react";
+import CcRedflag from "@/Component/ccRedflag";
+import PatientCategory, { CategorySelection } from "@/Component/patientCategory";
 import PatientInformation from "@/Component/patientInformation";
 import ReferralDetails from "@/Component/referralDetails";
 import HospitalNumber from "@/Component/hospitalNumber";
@@ -10,12 +10,12 @@ import PrimaryClinics from "@/Component/primaryClinics";
 import VsTemperature from "@/Component/vsTemperature";
 import VsBloodpressure from "@/Component/vsBloodpressure";
 import VsOximeter from "@/Component/vsOximeter";
-import CcRedflag from "@/Component/ccRedflag";
 import SummaryScreen from "@/Component/summaryScreen";
 import ClinicDashboard from "@/Component/clinicDashboard";
 import OperatorLogin from "@/Component/operatorLogin";
+import type { TicketMetadata } from "@/Component/summaryTypes";
 
-type AppStep = "welcome" | "category" | "patientForm" | "clinicChoice" | "primaryClinics" | "vitals" | "safety" | "summary";
+type AppStep = "safety" | "category" | "patientForm" | "clinicChoice" | "primaryClinics" | "vitals" | "summary";
 type ViewMode = "selector" | "kiosk" | "dashboard";
 type VitalStage = "bp" | "oximetry" | "temperature";
 
@@ -124,12 +124,6 @@ type PrimaryClinicPayload = {
   answers?: Record<string, boolean>;
 };
 
-const categoryToStatus = {
-  old: "returning",
-  new: "new",
-  referred: "referred",
-} as const;
-
 const clinicDestinations: Record<ClinicOption, string> = {
   "General Surgery": "Surgical Services Wing",
   "Internal Medicine": "Internal Medicine Unit",
@@ -157,66 +151,75 @@ const generateQueueCode = (clinic: ClinicOption) => {
 export default function Home() {
   const [operatorAuthenticated, setOperatorAuthenticated] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<ViewMode>("selector");
-  const [step, setStep] = useState<AppStep>("welcome");
-  const [selectedCategory, setSelectedCategory] = useState<PatientCategoryType>(null);
+  const [step, setStep] = useState<AppStep>("safety");
+
+  // STRUCTURED CATEGORY SELECTION STATE
+  const [categorySelection, setCategorySelection] = useState<CategorySelection>({
+    patientType: null,
+    serviceType: null,
+  });
+
   const [selectedClinic, setSelectedClinic] = useState<ClinicOption | null>(null);
   const [vitalStage, setVitalStage] = useState<VitalStage>("bp");
   const [patientInfo, setPatientInfo] = useState<PatientInfo>({
-    lastName: "",
-    firstName: "",
-    middleName: "",
-    pwdStatus: "",
-    birthdate: "",
-    age: "",
-    gender: "",
-    address: "",
-    birthplace: "",
-    religion: "",
-    civilStatus: "",
-    appointmentStatus: "",
+    lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "", gender: "", address: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: ""
   });
   const [returningInfo, setReturningInfo] = useState<ReturningInfo>({
-    hospitalNumber: "",
-    lastName: "",
-    firstName: "",
-    middleName: "",
-    birthdate: "",
-    age: "",
-    gender: "",
-    contactNumber: "",
-    purpose: "",
-    completeAddress: "",
-    birthplace: "",
-    religion: "",
-    civilStatus: "",
-    appointmentStatus: "",
+    hospitalNumber: "", lastName: "", firstName: "", middleName: "", birthdate: "", age: "", gender: "", contactNumber: "", purpose: "", completeAddress: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: ""
   });
   const [referralInfo, setReferralInfo] = useState<ReferralInfo>({
-    referringFacility: "",
-    facilityType: "",
-    referringDoctor: "",
-    referringContact: "",
-    referralDate: "",
-    referralDiagnosis: "",
-    referralPurpose: "",
-    interventions: "",
-    referralFormNo: "",
+    referringFacility: "", facilityType: "", referringDoctor: "", referringContact: "", referralDate: "", referralDiagnosis: "", referralPurpose: "", interventions: "", referralFormNo: ""
   });
   const [vitals, setVitals] = useState<VitalData>({ bpSys: "", bpDia: "", hr: "", spo2: "", temperature: "" });
   const [triageSelection, setTriageSelection] = useState<TriageSelection>({
-    groupLabel: "",
-    ccLabel: "",
-    subLabel: "",
-    clinic: "Family Medicine",
-    systemValue: "",
-    answers: {},
+    groupLabel: "", ccLabel: "", subLabel: "", clinic: "Family Medicine", systemValue: "", answers: {}
   });
   const [queueCode, setQueueCode] = useState("FM-042");
   const [destination, setDestination] = useState(clinicDestinations["Family Medicine"]);
   const [date, setDate] = useState(getCurrentDate());
   const [time, setTime] = useState(getCurrentTime());
+  const [ticketMetadata, setTicketMetadata] = useState<TicketMetadata>({
+    serviceTitle: "MEDICAL CONSULTATION",
+    ticketType: "consultation",
+    badgeColor: "bg-cyan-600 text-white",
+  });
 
   const updateTicketDateTime = () => {
+    setDate(getCurrentDate());
+    setTime(getCurrentTime());
+  };
+
+  const setSpecialTicket = (
+    prefix: "LAB" | "FLW" | "ANC",
+    serviceTitle: string,
+    ticketType: "lab" | "followup" | "ancillary",
+    destinationLabel: string,
+    badgeColor: string,
+  ) => {
+    const specialTicket: TicketMetadata = { serviceTitle, ticketType, badgeColor };
+    setDestination(destinationLabel);
+    setQueueCode(`${prefix}-${Math.floor(Math.random() * 900) + 100}`);
+    setTicketMetadata(specialTicket);
+    updateTicketDateTime();
+    setStep("summary");
+  };
+
+  const resetFormState = () => {
+    setCategorySelection({ patientType: null, serviceType: null });
+    setSelectedClinic(null);
+    setVitalStage("bp");
+    setPatientInfo({ lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "", gender: "", address: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
+    setReturningInfo({ hospitalNumber: "", lastName: "", firstName: "", middleName: "", birthdate: "", age: "", gender: "", contactNumber: "", purpose: "", completeAddress: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
+    setReferralInfo({ referringFacility: "", facilityType: "", referringDoctor: "", referringContact: "", referralDate: "", referralDiagnosis: "", referralPurpose: "", interventions: "", referralFormNo: "" });
+    setVitals({ bpSys: "", bpDia: "", hr: "", spo2: "", temperature: "" });
+    setTriageSelection({ groupLabel: "", ccLabel: "", subLabel: "", clinic: "Family Medicine", systemValue: "", answers: {} });
+    setQueueCode("FM-042");
+    setDestination(clinicDestinations["Family Medicine"]);
+    setTicketMetadata({
+      serviceTitle: "MEDICAL CONSULTATION",
+      ticketType: "consultation",
+      badgeColor: "bg-cyan-600 text-white",
+    });
     setDate(getCurrentDate());
     setTime(getCurrentTime());
   };
@@ -224,26 +227,10 @@ export default function Home() {
   const handleSelectMode = (mode: "kiosk" | "dashboard") => {
     setViewMode(mode);
     if (mode === "kiosk") {
-      setStep("welcome");
-      setSelectedCategory(null);
-      setSelectedClinic(null);
-      setVitalStage("bp");
-      setPatientInfo({ lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "", gender: "", address: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
-      setReturningInfo({ hospitalNumber: "", lastName: "", firstName: "", middleName: "", birthdate: "", age: "", gender: "", contactNumber: "", purpose: "", completeAddress: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
-      setReferralInfo({ referringFacility: "", facilityType: "", referringDoctor: "", referringContact: "", referralDate: "", referralDiagnosis: "", referralPurpose: "", interventions: "", referralFormNo: "" });
-      setVitals({ bpSys: "", bpDia: "", hr: "", spo2: "", temperature: "" });
-      setTriageSelection({ groupLabel: "", ccLabel: "", subLabel: "", clinic: "Family Medicine", systemValue: "", answers: {} });
-      setQueueCode("FM-042");
-      setDestination(clinicDestinations["Family Medicine"]);
-      setDate(getCurrentDate());
-      setTime(getCurrentTime());
+      setStep("safety");
+      resetFormState();
     }
   };
-
-  useEffect(() => {
-    const s = typeof window !== 'undefined' ? sessionStorage.getItem('operatorAuth') : null;
-    setOperatorAuthenticated(s === '1');
-  }, []);
 
   const handleOperatorLogin = () => {
     setOperatorAuthenticated(true);
@@ -255,42 +242,91 @@ export default function Home() {
     if (typeof window !== 'undefined') sessionStorage.removeItem('operatorAuth');
   };
 
-  const handleExitToOperator = () => {
-    // Return to selector and clear operator session so operator must sign in again
-    setViewMode('selector');
-    handleOperatorLogout();
-  };
-
   const handleBackToMode = () => {
     setViewMode("selector");
-    setStep("welcome");
+    setStep("safety");
   };
 
-  const handleStart = () => setStep("category");
-
-  const handleCategorySelect = (category: PatientCategoryType) => {
-    setSelectedCategory(category);
-    setStep("patientForm");
+  // HANDLES THE SELECTION FROM PATIENT CATEGORY COMPONENT
+  const handleCategorySelect = (selection: CategorySelection) => {
+    setCategorySelection(selection);
+    
+    // Automatically advance to patient form if both choices are selected
+    if (selection.patientType && selection.serviceType) {
+      setStep("patientForm");
+    }
   };
 
-  const handlePatientFormProceed = (values?: PatientFormValues) => {
+  const handlePatientFormProceed = (values?: PatientFormValues | Record<string, string>) => {
     if (values) {
-      if (selectedCategory === "new") {
+      const record = values as Record<string, string>;
+      if (categorySelection.patientType === "new") {
         setPatientInfo(values as PatientInfo);
-      } else if (selectedCategory === "old") {
+      } else if (categorySelection.patientType === "old") {
         setReturningInfo(values as ReturningInfo);
-      } else if (selectedCategory === "referred") {
-        setReferralInfo(values as ReferralInfo);
+      } else if (categorySelection.patientType === "referred") {
+        setReferralInfo({
+          referringFacility: record.referringFacility ?? "",
+          facilityType: record.facilityType ?? "",
+          referringDoctor: record.referringDoctor ?? "",
+          referringContact: record.referringContact ?? "",
+          referralDate: record.referralDate ?? "",
+          referralDiagnosis: record.referralDiagnosis ?? "",
+          referralPurpose: record.referralPurpose ?? "",
+          interventions: record.interventions ?? "",
+          referralFormNo: record.referralFormNo ?? "",
+        });
       }
     }
-    setStep("safety");
+
+    if (categorySelection.patientType === "referred") {
+      setStep("clinicChoice");
+      return;
+    }
+
+    const { serviceType } = categorySelection;
+
+    if (serviceType === "lab_diagnostics") {
+      setSpecialTicket(
+        "LAB",
+        "CENTRAL LABORATORY & DIAGNOSTICS",
+        "lab",
+        "Central Laboratory & Diagnostic Building - 1st Floor",
+        "bg-amber-500 text-slate-950",
+      );
+      return;
+    }
+
+    if (serviceType === "followup") {
+      setSpecialTicket(
+        "FLW",
+        "FOLLOW-UP & RESULTS REVIEW DESK",
+        "followup",
+        "OPD Follow-up & Results Desk - Window 3",
+        "bg-sky-500 text-white",
+      );
+      return;
+    }
+
+    if (serviceType === "other") {
+      setSpecialTicket(
+        "ANC",
+        "OPD ANCILLARY & SOCIAL SERVICES",
+        "ancillary",
+        "OPD Ancillary & Social Services Desk - Lobby 2",
+        "bg-emerald-500 text-slate-950",
+      );
+      return;
+    }
+
+    setStep("vitals");
   };
 
   const handlePatientFormBack = () => setStep("category");
 
   const handleVitalBack = () => {
     if (vitalStage === "bp") {
-      setStep("safety");
+      setStep("patientForm");
     } else if (vitalStage === "oximetry") {
       setVitalStage("bp");
     } else {
@@ -307,7 +343,7 @@ export default function Home() {
     } else if (vitalStage === "oximetry") {
       setVitalStage("temperature");
     } else {
-      if (selectedCategory === "referred") {
+      if (categorySelection.patientType === "referred") {
         setStep("clinicChoice");
       } else {
         setStep("primaryClinics");
@@ -315,10 +351,10 @@ export default function Home() {
     }
   };
 
-  const handleSafetyBack = () => setStep("patientForm");
-  const handleSafetyProceed = () => setStep("vitals");
+  const handleSafetyBack = () => setViewMode("selector");
+  const handleSafetyProceed = () => setStep("category");
 
-  const handleCategoryBack = () => setStep("welcome");
+  const handleCategoryBack = () => setStep("safety");
   const handleClinicBack = () => setStep("vitals");
 
   const handleClinicProceed = (clinic?: ClinicOption | null) => {
@@ -326,6 +362,11 @@ export default function Home() {
     setSelectedClinic(resolvedClinic);
     setDestination(clinicDestinations[resolvedClinic]);
     setQueueCode(generateQueueCode(resolvedClinic));
+    setTicketMetadata({
+      serviceTitle: "MEDICAL CONSULTATION",
+      ticketType: "consultation",
+      badgeColor: "bg-cyan-600 text-white",
+    });
     updateTicketDateTime();
     setStep("summary");
   };
@@ -335,6 +376,11 @@ export default function Home() {
     setSelectedClinic(clinic);
     setDestination(clinicDestinations[clinic]);
     setQueueCode(generateQueueCode(clinic));
+    setTicketMetadata({
+      serviceTitle: "MEDICAL CONSULTATION",
+      ticketType: "consultation",
+      badgeColor: "bg-cyan-600 text-white",
+    });
     setTriageSelection({
       groupLabel: payload?.group_label ?? "",
       ccLabel: payload?.cc_label ?? "",
@@ -348,36 +394,25 @@ export default function Home() {
   };
 
   const handleFinish = () => {
-    setSelectedCategory(null);
-    setSelectedClinic(null);
-    setVitalStage("bp");
-    setPatientInfo({ lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "", gender: "", address: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
-    setReturningInfo({ hospitalNumber: "", lastName: "", firstName: "", middleName: "", birthdate: "", age: "", gender: "", contactNumber: "", purpose: "", completeAddress: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "" });
-    setReferralInfo({ referringFacility: "", facilityType: "", referringDoctor: "", referringContact: "", referralDate: "", referralDiagnosis: "", referralPurpose: "", interventions: "", referralFormNo: "" });
-    setVitals({ bpSys: "", bpDia: "", hr: "", spo2: "", temperature: "" });
-    setTriageSelection({ groupLabel: "", ccLabel: "", subLabel: "", clinic: "Family Medicine", systemValue: "", answers: {} });
-    setQueueCode("FM-042");
-    setDestination(clinicDestinations["Family Medicine"]);
-    setDate(getCurrentDate());
-    setTime(getCurrentTime());
-    setStep("welcome");
+    resetFormState();
+    setStep("safety");
     setViewMode("kiosk");
   };
 
-  const patientName = selectedCategory === "old"
+  const patientName = categorySelection.patientType === "old"
     ? `${returningInfo.lastName}, ${returningInfo.firstName} ${returningInfo.middleName}`.trim()
-    : selectedCategory === "new"
+    : categorySelection.patientType === "new"
     ? `${patientInfo.lastName}, ${patientInfo.firstName} ${patientInfo.middleName}`.trim()
     : "N/A";
 
-  const age = selectedCategory === "old" ? returningInfo.age : selectedCategory === "new" ? patientInfo.age : "";
-  const gender = selectedCategory === "old" ? returningInfo.gender : selectedCategory === "new" ? patientInfo.gender : "";
-  const patientAddress = selectedCategory === "old"
+  const age = categorySelection.patientType === "old" ? returningInfo.age : categorySelection.patientType === "new" ? patientInfo.age : "";
+  const gender = categorySelection.patientType === "old" ? returningInfo.gender : categorySelection.patientType === "new" ? patientInfo.gender : "";
+  const patientAddress = categorySelection.patientType === "old"
     ? returningInfo.completeAddress
-    : selectedCategory === "new"
+    : categorySelection.patientType === "new"
       ? patientInfo.address
       : "";
-  const pwdStatus = selectedCategory === "new" ? patientInfo.pwdStatus : "";
+  const pwdStatus = categorySelection.patientType === "new" ? patientInfo.pwdStatus : "";
   const complaints = triageSelection.subLabel || triageSelection.ccLabel || triageSelection.groupLabel || "No chief complaint selected";
   const clinic = selectedClinic ?? triageSelection.clinic ?? "Family Medicine";
 
@@ -396,97 +431,121 @@ export default function Home() {
         {viewMode === "selector" && (
           operatorAuthenticated ? <ModeSelector onSelect={handleSelectMode} /> : <OperatorLogin onLogin={handleOperatorLogin} />
         )}
-      {viewMode === "selector" && operatorAuthenticated && (
-        <div className="fixed top-4 right-4">
-          <button onClick={handleOperatorLogout} className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white">Log out</button>
-        </div>
-      )}
-      {viewMode === "dashboard" && <ClinicDashboard onBack={handleBackToMode} />}
-      {viewMode === "kiosk" && (
-        <>
-          {step === "welcome" && <WelcomeScreen onStart={handleStart} />}
 
-      {step === "category" && (
-        <PatientCategory
-          selectedCategory={selectedCategory}
-          onCategorySelect={handleCategorySelect}
-          onBack={handleCategoryBack}
-        />
-      )}
+        {viewMode === "selector" && operatorAuthenticated && (
+          <div className="fixed top-4 right-4 z-20">
+            <button onClick={handleOperatorLogout} className="rounded-xl border border-slate-600 bg-slate-800 px-3 py-2 text-sm text-white hover:bg-slate-700">
+              Log out
+            </button>
+          </div>
+        )}
 
-      {step === "patientForm" && selectedCategory === "old" && (
-        <HospitalNumber onBack={handlePatientFormBack} onProceed={handlePatientFormProceed} />
-      )}
-      {step === "patientForm" && selectedCategory === "new" && (
-        <PatientInformation onBack={handlePatientFormBack} onProceed={handlePatientFormProceed} />
-      )}
-      {step === "patientForm" && selectedCategory === "referred" && (
-        <ReferralDetails onBack={handlePatientFormBack} onProceed={handlePatientFormProceed} />
-      )}
+        {viewMode === "dashboard" && <ClinicDashboard onBack={handleBackToMode} />}
 
-      {step === "clinicChoice" && selectedCategory === "referred" && (
-        <DesiredClinic
-          selectedClinic={selectedClinic}
-          onClinicSelect={setSelectedClinic}
-          onBack={handleClinicBack}
-          onProceed={handleClinicProceed}
-        />
-      )}
+        {viewMode === "kiosk" && (
+          <>
+            {step === "safety" && (
+              <CcRedflag 
+                onBack={handleSafetyBack} 
+                onProceed={handleSafetyProceed}
+                onPrintEmergencyTicket={(data) => {
+                  console.log("ER Ticket printed:", data);
+                }} 
+              />
+            )}
 
-      {step === "primaryClinics" && (
-        <PrimaryClinics
-          onBack={handleClinicBack}
-          onProceed={handlePrimaryClinicsProceed}
-        />
-      )}
+            {step === "category" && (
+              <PatientCategory
+                selectedCategory={categorySelection}
+                onCategorySelect={handleCategorySelect}
+                onBack={handleCategoryBack}
+              />
+            )}
 
-      {step === "vitals" && vitalStage === "bp" && (
-        <VsBloodpressure onBack={handleVitalBack} onProceed={handleVitalProceed} />
-      )}
-      {step === "vitals" && vitalStage === "oximetry" && (
-        <VsOximeter onBack={handleVitalBack} onProceed={handleVitalProceed} />
-      )}
-      {step === "vitals" && vitalStage === "temperature" && (
-        <VsTemperature onBack={handleVitalBack} onProceed={handleVitalProceed} />
-      )}
+            {step === "patientForm" && categorySelection.patientType === "old" && (
+              <HospitalNumber onBack={handlePatientFormBack} onProceed={handlePatientFormProceed} />
+            )}
+            {step === "patientForm" && categorySelection.patientType === "new" && (
+              <PatientInformation onBack={handlePatientFormBack} onProceed={handlePatientFormProceed} />
+            )}
+            {step === "patientForm" && categorySelection.patientType === "referred" && (
+              <ReferralDetails
+                selectedServiceType={
+                  categorySelection.serviceType === 'consultation'
+                    ? 'referred'
+                    : categorySelection.serviceType === 'lab_diagnostics'
+                      ? 'diagnostics'
+                      : categorySelection.serviceType === 'followup'
+                        ? 'followup'
+                        : 'referred'
+                }
+                onBack={handlePatientFormBack}
+                onProceed={handlePatientFormProceed}
+              />
+            )}
 
-      {step === "safety" && (
-        <CcRedflag onBack={handleSafetyBack} onProceed={handleSafetyProceed} />
-      )}
+            {step === "clinicChoice" && categorySelection.patientType === "referred" && (
+              <DesiredClinic
+                selectedClinic={selectedClinic}
+                onClinicSelect={setSelectedClinic}
+                onBack={handleClinicBack}
+                onProceed={handleClinicProceed}
+              />
+            )}
 
-      {step === "summary" && (
-        <SummaryScreen
-          patientName={patientName}
-          age={age}
-          gender={gender}
-          patientAddress={patientAddress}
-          pwdStatus={pwdStatus}
-          bpSys={vitals.bpSys || "120"}
-          bpDia={vitals.bpDia || "80"}
-          hr={vitals.hr || "72"}
-          spo2={vitals.spo2 || "98"}
-          temperature={vitals.temperature || "36.8"}
-          complaints={complaints}
-          clinic={clinic}
-          destination={destination}
-          queueCode={queueCode}
-          date={date}
-          time={time}
-          patientStatus={
-            selectedCategory
-              ? categoryToStatus[selectedCategory as keyof typeof categoryToStatus]
-              : "new"
-          }
-          referralFrom={referralInfo.referringFacility}
-          referralDoctor={referralInfo.referringDoctor}
-          referralDate={referralInfo.referralDate}
-          referralPurpose={referralInfo.referralPurpose}
-          referralDiagnosis={referralInfo.referralDiagnosis}
-          onFinish={handleFinish}
-        />
-      )}
-        </>
-      )}
+            {step === "primaryClinics" && (
+              <PrimaryClinics
+                onBack={handleClinicBack}
+                onProceed={handlePrimaryClinicsProceed}
+              />
+            )}
+
+            {step === "vitals" && vitalStage === "bp" && (
+              <VsBloodpressure onBack={handleVitalBack} onProceed={handleVitalProceed} />
+            )}
+            {step === "vitals" && vitalStage === "oximetry" && (
+              <VsOximeter onBack={handleVitalBack} onProceed={handleVitalProceed} />
+            )}
+            {step === "vitals" && vitalStage === "temperature" && (
+              <VsTemperature onBack={handleVitalBack} onProceed={handleVitalProceed} />
+            )}
+
+            {step === "summary" && (
+              <SummaryScreen
+                patientName={patientName}
+                age={age}
+                gender={gender}
+                patientAddress={patientAddress}
+                pwdStatus={pwdStatus}
+                bpSys={vitals.bpSys || "120"}
+                bpDia={vitals.bpDia || "80"}
+                hr={vitals.hr || "72"}
+                spo2={vitals.spo2 || "98"}
+                temperature={vitals.temperature || "36.8"}
+                complaints={complaints}
+                clinic={clinic}
+                destination={destination}
+                queueCode={queueCode}
+                date={date}
+                time={time}
+                patientStatus={
+                  categorySelection.patientType === "old"
+                    ? "returning"
+                    : categorySelection.patientType === "referred"
+                      ? "referred"
+                      : "new"
+                }
+                referralFrom={referralInfo.referringFacility}
+                referralDoctor={referralInfo.referringDoctor}
+                referralDate={referralInfo.referralDate}
+                referralPurpose={referralInfo.referralPurpose}
+                referralDiagnosis={referralInfo.referralDiagnosis}
+                ticketMetadata={ticketMetadata}
+                onFinish={handleFinish}
+              />
+            )}
+          </>
+        )}
       </div>
     </div>
   );
