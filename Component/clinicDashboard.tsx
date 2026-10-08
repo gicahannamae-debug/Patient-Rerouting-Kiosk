@@ -6,19 +6,35 @@ import React, { useState, useEffect } from 'react';
 type Category = 'URGENT' | 'PRIORITY' | 'REGULAR';
 type ClinicCode = 'SUR' | 'PED' | 'OBG' | 'ENT' | 'IM' | 'ER';
 
+interface Vitals {
+  bp: string;     // mmHg, e.g. "120/80"
+  hr: number;     // bpm
+  rr: number;     // breaths/min
+  temp: number;   // °C
+  spo2: number;   // %
+}
+
+interface Complaint {
+  complaint: string;
+  duration: string;            // e.g. "3 days"
+  severity: string | number;   // e.g. "Severe" or 8
+  location: string;            // e.g. "Right lower abdomen"
+}
+
 interface Patient {
   id: string;
-  ticketCode: string;
+  ticketCode: string;          // e.g. "SUR-U-001"
   name: string;
   age: number;
   sex: 'M' | 'F';
-  chiefComplaints: string[];
+  chiefComplaints: Complaint[];
+  vitals?: Vitals | null;
   category: Category;
   clinic: ClinicCode;
   status: 'waiting' | 'serving' | 'done';
   queueNumber: number;
   arrivedAt: string;
-  completedAt?: string;
+  completedAt?: string;        // ISO string, set when finished
 }
 
 interface Clinic {
@@ -30,52 +46,30 @@ interface Clinic {
   isER?: boolean;
 }
 
-// ─── Clinic Definitions ───────────────────────────────────────────────────────
+// ─── Clinic Definitions (config, not patient data) ───────────────────────────
 
 const CLINICS: Clinic[] = [
-  { code: 'SUR', name: 'Surgery',           staffId: 'NMMC-SUR-047', staffCode: 'Sc#3kW9!', color: 'cyan'   },
-  { code: 'PED', name: 'Pediatrics',        staffId: 'NMMC-PED-112', staffCode: 'Pd@7mR2$', color: 'green'  },
-  { code: 'OBG', name: 'OB-GYN',           staffId: 'NMMC-OBG-083', staffCode: 'Og%4nX6^', color: 'pink'   },
-  { code: 'ENT', name: 'ENT',              staffId: 'NMMC-ENT-029', staffCode: 'En!8qL1#', color: 'purple' },
-  { code: 'IM',  name: 'Internal Medicine', staffId: 'NMMC-IM-156',  staffCode: 'Im*5jH3@', color: 'blue'   },
-  { code: 'ER',  name: 'Emergency Dept.',  staffId: 'NMMC-ER-001',  staffCode: 'Er$2bV7!', color: 'red', isER: true },
+  { code: 'SUR', name: 'Surgery',           staffId: 'Surgery',    staffCode: '111', color: 'cyan'   },
+  { code: 'PED', name: 'Pediatrics',        staffId: 'Pediatrics', staffCode: '222', color: 'green'  },
+  { code: 'OBG', name: 'OB-GYN',            staffId: 'Obgyne',     staffCode: '333', color: 'pink'   },
+  { code: 'ENT', name: 'ENT',               staffId: 'ENT',        staffCode: '444', color: 'purple' },
+  { code: 'IM',  name: 'Internal Medicine', staffId: 'IM',         staffCode: '555', color: 'blue'   },
+  { code: 'ER',  name: 'Emergency Dept.',   staffId: 'ER',         staffCode: '666', color: 'red', isER: true },
 ];
 
-// ─── Seed / Mock Data ─────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function generateTicket(clinic: ClinicCode, cat: Category, num: number): string {
-  const catCode = cat === 'URGENT' ? 'U' : cat === 'PRIORITY' ? 'P' : 'R';
-  return `${clinic}-${catCode}-${String(num).padStart(3, '0')}`;
+// "SUR-U-001" -> "U-001", "ER-E-001" -> "E-001"
+function displayNumber(ticketCode: string): string {
+  return ticketCode.split('-').slice(1).join('-');
 }
-
-const SEED_PATIENTS: Patient[] = [
-  { id:'p1',  ticketCode: generateTicket('SUR','URGENT',1),   name:'Maria Santos',    age:58, sex:'F', chiefComplaints:['Severe abdominal pain','Vomiting'],       category:'URGENT',   clinic:'SUR', status:'waiting', queueNumber:1,  arrivedAt:'08:12' },
-  { id:'p2',  ticketCode: generateTicket('SUR','URGENT',2),   name:'Ricardo Diaz',    age:44, sex:'M', chiefComplaints:['Post-op wound dehiscence'],               category:'URGENT',   clinic:'SUR', status:'waiting', queueNumber:2,  arrivedAt:'08:30' },
-  { id:'p3',  ticketCode: generateTicket('SUR','PRIORITY',1), name:'Elena Cruz',      age:36, sex:'F', chiefComplaints:['Inguinal hernia','Pain on movement'],      category:'PRIORITY', clinic:'SUR', status:'waiting', queueNumber:3,  arrivedAt:'08:45' },
-  { id:'p4',  ticketCode: generateTicket('SUR','REGULAR',1),  name:'Jose Reyes',      age:62, sex:'M', chiefComplaints:['Skin cyst removal follow-up'],            category:'REGULAR',  clinic:'SUR', status:'waiting', queueNumber:4,  arrivedAt:'09:00' },
-  { id:'p5',  ticketCode: generateTicket('PED','URGENT',1),   name:'Leo Aquino',      age:3,  sex:'M', chiefComplaints:['High fever 40°C','Febrile seizure'],      category:'URGENT',   clinic:'PED', status:'waiting', queueNumber:1,  arrivedAt:'08:20' },
-  { id:'p6',  ticketCode: generateTicket('PED','PRIORITY',1), name:'Ana Bautista',    age:7,  sex:'F', chiefComplaints:['Persistent cough','Mild wheezing'],       category:'PRIORITY', clinic:'PED', status:'waiting', queueNumber:2,  arrivedAt:'08:50' },
-  { id:'p7',  ticketCode: generateTicket('PED','REGULAR',1),  name:'Carlo Mendoza',   age:5,  sex:'M', chiefComplaints:['Routine vaccination'],                    category:'REGULAR',  clinic:'PED', status:'waiting', queueNumber:3,  arrivedAt:'09:10' },
-  { id:'p8',  ticketCode: generateTicket('OBG','URGENT',1),   name:'Lina Villanueva', age:28, sex:'F', chiefComplaints:['Vaginal bleeding','Abdominal cramps'],    category:'URGENT',   clinic:'OBG', status:'waiting', queueNumber:1,  arrivedAt:'08:05' },
-  { id:'p9',  ticketCode: generateTicket('OBG','PRIORITY',1), name:'Grace Flores',    age:32, sex:'F', chiefComplaints:['Prenatal check-up — 3rd trimester'],      category:'PRIORITY', clinic:'OBG', status:'waiting', queueNumber:2,  arrivedAt:'08:55' },
-  { id:'p10', ticketCode: generateTicket('OBG','REGULAR',1),  name:'Luz Tan',         age:45, sex:'F', chiefComplaints:['Pap smear follow-up'],                    category:'REGULAR',  clinic:'OBG', status:'waiting', queueNumber:3,  arrivedAt:'09:05' },
-  { id:'p11', ticketCode: generateTicket('ENT','URGENT',1),   name:'Ramon Garcia',    age:50, sex:'M', chiefComplaints:['Sudden hearing loss','Dizziness'],        category:'URGENT',   clinic:'ENT', status:'waiting', queueNumber:1,  arrivedAt:'08:35' },
-  { id:'p12', ticketCode: generateTicket('ENT','PRIORITY',1), name:'Nora Ocampo',     age:39, sex:'F', chiefComplaints:['Nasal polyp obstruction'],                category:'PRIORITY', clinic:'ENT', status:'waiting', queueNumber:2,  arrivedAt:'09:00' },
-  { id:'p13', ticketCode: generateTicket('ENT','REGULAR',1),  name:'Ben Navarro',     age:29, sex:'M', chiefComplaints:['Throat irritation','Tonsil swelling'],    category:'REGULAR',  clinic:'ENT', status:'waiting', queueNumber:3,  arrivedAt:'09:20' },
-  { id:'p14', ticketCode: generateTicket('IM','URGENT',1),    name:'Dolores Lim',     age:70, sex:'F', chiefComplaints:['Chest tightness','Shortness of breath'],  category:'URGENT',   clinic:'IM',  status:'waiting', queueNumber:1,  arrivedAt:'08:00' },
-  { id:'p15', ticketCode: generateTicket('IM','PRIORITY',1),  name:'Felix Castro',    age:55, sex:'M', chiefComplaints:['Uncontrolled hypertension','Headache'],   category:'PRIORITY', clinic:'IM',  status:'waiting', queueNumber:2,  arrivedAt:'08:40' },
-  { id:'p16', ticketCode: generateTicket('IM','REGULAR',1),   name:'Myra Dela Cruz',  age:48, sex:'F', chiefComplaints:['Diabetes monitoring follow-up'],          category:'REGULAR',  clinic:'IM',  status:'waiting', queueNumber:3,  arrivedAt:'09:15' },
-  { id:'p17', ticketCode: 'ER-E-001', name:'Andres Ramos',    age:34, sex:'M', chiefComplaints:['Severe chest pain','Diaphoresis'],          category:'URGENT',   clinic:'ER',  status:'waiting', queueNumber:1,  arrivedAt:'08:02' },
-  { id:'p18', ticketCode: 'ER-E-002', name:'Cynthia Rojas',   age:21, sex:'F', chiefComplaints:['RTA — head trauma','LOC episode'],          category:'URGENT',   clinic:'ER',  status:'waiting', queueNumber:2,  arrivedAt:'08:18' },
-  { id:'p19', ticketCode: 'ER-E-003', name:'Mario Dela Vega', age:65, sex:'M', chiefComplaints:['Stroke symptoms — facial droop'],           category:'URGENT',   clinic:'ER',  status:'waiting', queueNumber:3,  arrivedAt:'08:44' },
-];
 
 const CAT_ORDER: Category[] = ['URGENT', 'PRIORITY', 'REGULAR'];
 
 const CAT_STYLE: Record<Category, { bg: string; text: string; badge: string; label: string }> = {
-  URGENT:   { bg: 'bg-red-600',    text: 'text-white',       badge: 'bg-red-600 text-white',         label: 'URGENT (U)'   },
-  PRIORITY: { bg: 'bg-orange-400', text: 'text-white',       badge: 'bg-orange-400 text-white',      label: 'PRIORITY (P)' },
-  REGULAR:  { bg: 'bg-green-500',  text: 'text-white',       badge: 'bg-green-500 text-white',       label: 'REGULAR (R)'  },
+  URGENT:   { bg: 'bg-red-600',    text: 'text-white', badge: 'bg-red-600 text-white',    label: 'URGENT (U)'   },
+  PRIORITY: { bg: 'bg-orange-400', text: 'text-white', badge: 'bg-orange-400 text-white', label: 'PRIORITY (P)' },
+  REGULAR:  { bg: 'bg-green-500',  text: 'text-white', badge: 'bg-green-500 text-white',  label: 'REGULAR (R)'  },
 };
 
 function sortQueue(patients: Patient[]): Patient[] {
@@ -87,96 +81,173 @@ function sortQueue(patients: Patient[]): Patient[] {
   });
 }
 
+// If nobody is being served in this clinic, the next waiting patient becomes "serving"
+function promoteNext(list: Patient[], clinic: ClinicCode): Patient[] {
+  if (list.some(p => p.clinic === clinic && p.status === 'serving')) return list;
+  const next = sortQueue(list.filter(p => p.clinic === clinic && p.status === 'waiting'))[0];
+  if (!next) return list;
+  return list.map(p => (p.id === next.id ? { ...p, status: 'serving' as const } : p));
+}
+
+function promoteAll(list: Patient[]): Patient[] {
+  return CLINICS.reduce((acc, c) => promoteNext(acc, c.code), list);
+}
+
 function now(): string {
   return new Date().toLocaleTimeString('en-PH', { hour: '2-digit', minute: '2-digit' });
 }
 
-function PatientCard({ patient, onServe, onDone, isServing }: {
-  patient: Patient;
-  onServe: () => void;
-  onDone: () => void;
-  isServing: boolean;
-}) {
-  const cat = CAT_STYLE[patient.category];
+function formatDateTime(iso?: string): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return iso;
+  return d.toLocaleString('en-PH', {
+    month: '2-digit', day: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function firstComplaint(p: Patient): string {
+  return p.chiefComplaints[0]?.complaint ?? '—';
+}
+
+// ─── Small components ─────────────────────────────────────────────────────────
+
+function VitalsGrid({ vitals, large = false }: { vitals?: Vitals | null; large?: boolean }) {
+  const items = [
+    { label: 'BP',   value: vitals?.bp ?? '—',                                   unit: 'mmHg' },
+    { label: 'HR',   value: vitals?.hr != null ? String(vitals.hr) : '—',        unit: 'bpm'  },
+    { label: 'RR',   value: vitals?.rr != null ? String(vitals.rr) : '—',        unit: '/min' },
+    { label: 'Temp', value: vitals?.temp != null ? vitals.temp.toFixed(1) : '—', unit: '°C'   },
+    { label: 'SpO₂', value: vitals?.spo2 != null ? String(vitals.spo2) : '—',    unit: '%'    },
+  ];
   return (
-    <div className={`rounded-2xl border ${isServing ? 'border-cyan-400 bg-cyan-950/80 ring-2 ring-cyan-400' : 'border-slate-700 bg-slate-800/60'} p-4 transition-all duration-300`}>
-      <div className="flex items-start justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <span className={`shrink-0 rounded-xl px-3 py-1.5 text-sm font-bold tracking-wider ${cat.badge}`}>
-            {patient.ticketCode}
-          </span>
-          <div className="min-w-0">
-            <p className="truncate font-semibold text-white">{patient.name}</p>
-            <p className="text-xs text-slate-400">{patient.age} y/o · {patient.sex === 'M' ? 'Male' : 'Female'} · Arrived {patient.arrivedAt}</p>
-          </div>
+    <div className={`grid grid-cols-2 sm:grid-cols-5 ${large ? 'gap-3' : 'gap-2'}`}>
+      {items.map(v => (
+        <div key={v.label} className={`rounded-xl bg-slate-900/60 border border-cyan-800/60 ${large ? 'px-4 py-3' : 'px-2 py-1.5'}`}>
+          <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">{v.label}</p>
+          <p className={`${large ? 'text-2xl' : 'text-sm'} font-black text-white leading-tight`}>
+            {v.value} <span className="text-xs font-medium text-slate-400">{v.unit}</span>
+          </p>
         </div>
-        <div className="shrink-0 flex flex-col gap-2 items-end">
-          {!isServing && patient.status === 'waiting' && (
-            <button onClick={onServe} className="rounded-xl bg-cyan-500 hover:bg-cyan-400 text-white text-xs font-bold px-3 py-1.5 transition-colors">
-              Call Now
-            </button>
-          )}
-          <button onClick={onDone} className={`rounded-xl ${isServing ? 'bg-slate-600 hover:bg-slate-500' : 'bg-emerald-600 hover:bg-emerald-500'} text-white text-xs font-bold px-3 py-1.5 transition-colors`}>
-            {isServing ? 'Done' : 'Finish'}
-          </button>
-        </div>
-      </div>
-      <div className="mt-3 flex flex-wrap gap-1.5">
-        {patient.chiefComplaints.map((c, i) => (
-          <span key={i} className="rounded-lg bg-slate-700 px-2 py-0.5 text-xs text-slate-300">{c}</span>
-        ))}
-      </div>
-      {isServing && (
-        <p className="mt-2 text-xs font-semibold text-cyan-400 tracking-wide animate-pulse">● NOW SERVING</p>
-      )}
+      ))}
     </div>
   );
 }
 
-function NowServingBanner({ patient, canFinish, onFinish }: { patient: Patient | null; canFinish: boolean; onFinish: () => void }) {
-  if (!patient) return null;
-  const cat = CAT_STYLE[patient.category];
+function Field({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="rounded-2xl bg-cyan-950 border border-cyan-400 ring-2 ring-cyan-400 p-6 mb-6">
-      <p className="text-xs font-bold tracking-widest text-cyan-400 mb-3">NOW SERVING</p>
-      <div className="flex flex-col sm:flex-row sm:items-center gap-4">
-        <div className={`text-center rounded-2xl ${cat.bg} px-6 py-4 min-w-[120px]`}>
-          <p className="text-3xl font-black text-white tracking-widest">{patient.ticketCode}</p>
-          <p className="mt-1 text-xs font-bold text-white/80">{cat.label}</p>
-        </div>
-        <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 gap-3">
-          <div>
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Patient Name</p>
-            <p className="text-lg font-bold text-white">{patient.name}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Age / Sex</p>
-            <p className="text-lg font-bold text-white">{patient.age} y/o · {patient.sex === 'M' ? 'Male' : 'Female'}</p>
-          </div>
-          <div>
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Arrived At</p>
-            <p className="text-lg font-bold text-white">{patient.arrivedAt}</p>
-          </div>
-          <div className="col-span-2 sm:col-span-3">
-            <p className="text-xs text-slate-400 uppercase tracking-wider mb-1">Chief Complaints</p>
-            <div className="flex flex-wrap gap-1.5">
-              {patient.chiefComplaints.map((c, i) => (
-                <span key={i} className="rounded-lg bg-cyan-800 text-cyan-100 px-2.5 py-0.5 text-sm font-medium">{c}</span>
-              ))}
-            </div>
-          </div>
-        </div>
-      </div>
-      {canFinish && (
-        <div className="mt-6 flex justify-end">
-          <button onClick={onFinish} className="rounded-2xl bg-emerald-600 hover:bg-emerald-500 px-5 py-3 text-sm font-semibold text-white transition-colors">
-            Finish patient
-          </button>
-        </div>
-      )}
+    <div>
+      <p className="text-xs text-slate-400 uppercase tracking-wider">{label}</p>
+      <p className="text-2xl font-bold text-white">{value}</p>
     </div>
   );
 }
+
+// Compact card for waiting patients
+function CompactCard({ patient }: { patient: Patient }) {
+  const cat = CAT_STYLE[patient.category];
+  const extra = patient.chiefComplaints.length - 1;
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2">
+      <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold tracking-wider ${cat.badge}`}>
+        {displayNumber(patient.ticketCode)}
+      </span>
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-white">{patient.name}</p>
+        <p className="truncate text-xs text-slate-400">
+          {patient.age} y/o · {patient.sex} · {firstComplaint(patient)}
+          {extra > 0 ? ` +${extra}` : ''}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+// Large card for the patient being served. Shows the titles with "—" when empty.
+function NowServingBanner({ patient, onFinish }: { patient: Patient | null; onFinish: () => void }) {
+  const cat = patient ? CAT_STYLE[patient.category] : null;
+  const complaints = patient?.chiefComplaints ?? [];
+
+  return (
+    <div className="w-full rounded-3xl bg-cyan-950 border border-cyan-400 ring-2 ring-cyan-400 p-6 sm:p-8">
+      <p className={`text-xs font-bold tracking-widest text-cyan-400 mb-4 ${patient ? 'animate-pulse' : ''}`}>
+        {patient ? '● NOW SERVING' : 'NOW SERVING'}
+      </p>
+
+      {/* Row 1: patient number + basic info */}
+      <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+        <div className={`text-center rounded-2xl ${cat?.bg ?? 'bg-slate-700'} px-8 py-6 min-w-[170px]`}>
+          <p className="text-5xl font-black text-white tracking-widest">
+            {patient ? displayNumber(patient.ticketCode) : '—'}
+          </p>
+          <p className="mt-2 text-xs font-bold text-white/80">{cat?.label ?? 'PATIENT NUMBER'}</p>
+        </div>
+
+        <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
+          <div className="col-span-2">
+            <Field label="Patient Name" value={patient?.name ?? '—'} />
+          </div>
+          <Field label="Age" value={patient ? `${patient.age} y/o` : '—'} />
+          <Field label="Sex" value={patient?.sex ?? '—'} />
+          <div className="col-span-2 sm:col-span-4">
+            <p className="text-xs text-slate-400 uppercase tracking-wider">Arrived At</p>
+            <p className="text-lg font-bold text-white">{patient?.arrivedAt ?? '—'}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Row 2: complaints table */}
+      <div className="mt-8">
+        <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Chief Complaints</p>
+        <div className="overflow-x-auto rounded-2xl border border-cyan-800/60">
+          <div className="min-w-[560px]">
+            <div className="grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4 bg-cyan-900/60 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-cyan-300">
+              <span>Complaint</span>
+              <span>Duration</span>
+              <span>Severity</span>
+              <span>Location</span>
+            </div>
+            {complaints.length === 0 ? (
+              <div className="grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4 px-4 py-3 text-base text-slate-500">
+                <span>—</span><span>—</span><span>—</span><span>—</span>
+              </div>
+            ) : (
+              complaints.map((c, i) => (
+                <div
+                  key={i}
+                  className="grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4 border-t border-cyan-800/40 px-4 py-3 text-base text-white"
+                >
+                  <span className="font-semibold">{c.complaint || '—'}</span>
+                  <span>{c.duration || '—'}</span>
+                  <span>{c.severity !== '' && c.severity != null ? c.severity : '—'}</span>
+                  <span>{c.location || '—'}</span>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Row 3: vitals */}
+      <div className="mt-6">
+        <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Vitals</p>
+        <VitalsGrid vitals={patient?.vitals} large />
+      </div>
+
+      <div className="mt-8 flex justify-end">
+        <button
+          onClick={onFinish}
+          disabled={!patient}
+          className="rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed px-8 py-3 text-base font-bold text-white transition-colors"
+        >
+          Finish
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ─── Clinic Queue ─────────────────────────────────────────────────────────────
 
 function ClinicQueue({ clinic, allPatients, onUpdate }: {
   clinic: Clinic;
@@ -204,53 +275,23 @@ function ClinicQueue({ clinic, allPatients, onUpdate }: {
     e2: myPatients.filter(p => p.category !== 'URGENT').length,
   };
 
-  function handleServe(patient: Patient) {
-    const updated = allPatients.map(p => {
-      if (p.id === patient.id) return { ...p, status: 'serving' as const };
-      if (p.clinic === clinic.code && p.status === 'serving') {
-        return {
-          ...p,
-          status: 'done' as const,
-          completedAt: new Date().toLocaleString('en-PH', {
-            month: '2-digit',
-            day: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-          }),
-        };
-      }
-      return p;
-    });
-    onUpdate(updated);
-  }
-
-  function handleDone(patient: Patient) {
-    const updated = allPatients.map(p =>
-      p.id === patient.id
-        ? {
-            ...p,
-            status: 'done' as const,
-            completedAt:
-              p.completedAt ?? new Date().toLocaleString('en-PH', {
-                month: '2-digit',
-                day: '2-digit',
-                year: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-              }),
-          }
-        : p
+  // Finish the current patient; the next one in line is promoted automatically
+  function handleFinish(patient: Patient) {
+    onUpdate(
+      allPatients.map(p =>
+        p.id === patient.id
+          ? { ...p, status: 'done' as const, completedAt: new Date().toISOString() }
+          : p
+      )
     );
-    onUpdate(updated);
   }
 
   const isER = clinic.isER;
 
   return (
-    <div className="min-h-screen bg-slate-900 text-slate-100">
-      <header className={`sticky top-0 z-20 border-b ${isER ? 'border-red-800 bg-red-950' : 'border-slate-700 bg-slate-900/95'} backdrop-blur-sm`}>
-        <div className="max-w-5xl mx-auto px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="text-slate-100">
+      <header className={`sticky top-0 z-20 rounded-2xl border ${isER ? 'border-red-800 bg-red-950' : 'border-slate-700 bg-slate-900/95'} backdrop-blur-sm`}>
+        <div className="px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <div className={`w-2.5 h-8 rounded-full ${isER ? 'bg-red-500' : 'bg-cyan-500'}`} />
             <div>
@@ -290,14 +331,13 @@ function ClinicQueue({ clinic, allPatients, onUpdate }: {
         </div>
       </header>
 
-      <main className="max-w-5xl mx-auto px-4 py-6 space-y-6">
+      <main className="py-6 space-y-6">
         <NowServingBanner
           patient={serving}
-          canFinish={!!serving && waiting.length === 0}
-          onFinish={() => { if (serving) handleDone(serving); }}
+          onFinish={() => { if (serving) handleFinish(serving); }}
         />
 
-        {CAT_ORDER.filter(cat => isER ? cat === 'URGENT' : true).map(cat => {
+        {CAT_ORDER.filter(cat => (isER ? cat === 'URGENT' : true)).map(cat => {
           const group = grouped[cat];
           const style = CAT_STYLE[cat];
           return (
@@ -307,37 +347,188 @@ function ClinicQueue({ clinic, allPatients, onUpdate }: {
                 <span className="text-sm text-slate-500">{group.length} patient{group.length !== 1 ? 's' : ''} waiting</span>
               </div>
               {group.length === 0 ? (
-                <div className="rounded-2xl border border-slate-700/50 bg-slate-800/30 py-6 text-center text-slate-500 text-sm">
+                <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 py-4 text-center text-slate-500 text-sm">
                   No {cat.toLowerCase()} patients in queue
                 </div>
               ) : (
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {group.map(p => (
-                    <PatientCard
-                      key={p.id}
-                      patient={p}
-                      isServing={false}
-                      onServe={() => handleServe(p)}
-                      onDone={() => handleDone(p)}
-                    />
-                  ))}
+                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+                  {group.map(p => <CompactCard key={p.id} patient={p} />)}
                 </div>
               )}
             </section>
           );
         })}
-
-        {myPatients.length === 0 && (
-          <div className="rounded-2xl border border-slate-700 bg-slate-800/40 py-16 text-center">
-            <p className="text-4xl mb-3">✓</p>
-            <p className="text-lg font-bold text-white">All clear — no patients in queue</p>
-            <p className="text-sm text-slate-500 mt-1">New patients will appear here when registered at the kiosk.</p>
-          </div>
-        )}
       </main>
     </div>
   );
 }
+
+// ─── Top bar: Completed button + 3-bar menu ───────────────────────────────────
+
+function CompletedButton({ count, onClick }: { count: number; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex h-11 items-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-4 text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+    >
+      Recently Completed
+      <span className="rounded-lg bg-cyan-600 px-2 py-0.5 text-sm font-black">{count}</span>
+    </button>
+  );
+}
+
+function MenuButton({ onHistory, onLogout }: { onHistory: () => void; onLogout: () => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className="relative">
+      <button
+        onClick={() => setOpen(v => !v)}
+        aria-label="Menu"
+        className="flex h-11 w-11 flex-col items-center justify-center gap-1.5 rounded-xl border border-slate-600 bg-slate-800 hover:bg-slate-700 transition-colors"
+      >
+        <span className="block h-0.5 w-5 rounded bg-white" />
+        <span className="block h-0.5 w-5 rounded bg-white" />
+        <span className="block h-0.5 w-5 rounded bg-white" />
+      </button>
+
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-full z-40 mt-2 w-48 overflow-hidden rounded-xl border border-slate-700 bg-slate-800 shadow-2xl">
+            <button
+              onClick={() => { setOpen(false); onHistory(); }}
+              className="block w-full px-4 py-3 text-left text-sm font-semibold text-white hover:bg-slate-700 transition-colors"
+            >
+              Patient History
+            </button>
+            <button
+              onClick={() => { setOpen(false); onLogout(); }}
+              className="block w-full border-t border-slate-700 px-4 py-3 text-left text-sm font-semibold text-red-400 hover:bg-slate-700 transition-colors"
+            >
+              Clinic Log out
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── Modals ───────────────────────────────────────────────────────────────────
+
+function ModalShell({ subtitle, title, onClose, children, wide = false }: {
+  subtitle: string;
+  title: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" onClick={onClose}>
+      <div
+        className={`w-full ${wide ? 'max-w-3xl' : 'max-w-2xl'} max-h-[85vh] overflow-hidden rounded-3xl border border-slate-700 bg-slate-900 shadow-2xl flex flex-col`}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between border-b border-slate-700 px-6 py-4">
+          <div>
+            <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">{subtitle}</p>
+            <h2 className="text-xl font-black text-white">{title}</h2>
+          </div>
+          <button onClick={onClose} className="rounded-lg px-3 py-1.5 text-sm font-semibold text-slate-300 hover:bg-slate-800">
+            Close
+          </button>
+        </div>
+        <div className="overflow-y-auto p-6">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// Recently completed: Queue | Name | Chief complaint (one) | Call again
+function CompletedModal({ clinic, patients, onClose, onCallAgain }: {
+  clinic: Clinic;
+  patients: Patient[];
+  onClose: () => void;
+  onCallAgain: (p: Patient) => void;
+}) {
+  return (
+    <ModalShell subtitle={clinic.name} title="Recently Completed" onClose={onClose} wide>
+      {patients.length === 0 ? (
+        <p className="py-10 text-center text-sm text-slate-500">No completed patients yet.</p>
+      ) : (
+        <div className="min-w-[520px]">
+          <div className="grid grid-cols-[90px_1fr_1fr_110px] gap-4 px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+            <span>Queue</span>
+            <span>Name</span>
+            <span>Chief Complaint</span>
+            <span />
+          </div>
+          <ul className="space-y-2">
+            {patients.map(p => (
+              <li
+                key={p.id}
+                className="grid grid-cols-[90px_1fr_1fr_110px] items-center gap-4 rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2"
+              >
+                <span className={`w-fit rounded-lg px-2.5 py-1 text-xs font-bold tracking-wider ${CAT_STYLE[p.category].badge}`}>
+                  {displayNumber(p.ticketCode)}
+                </span>
+                <span className="truncate text-sm font-semibold text-white">{p.name}</span>
+                <span className="truncate text-sm text-slate-300">{firstComplaint(p)}</span>
+                <button
+                  onClick={() => onCallAgain(p)}
+                  className="rounded-xl bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 text-xs font-bold text-white transition-colors"
+                >
+                  Call again
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </ModalShell>
+  );
+}
+
+// Patient history: full details of every completed patient
+function HistoryModal({ clinic, patients, onClose }: { clinic: Clinic; patients: Patient[]; onClose: () => void }) {
+  return (
+    <ModalShell subtitle={clinic.name} title="Patient History" onClose={onClose}>
+      {patients.length === 0 ? (
+        <p className="py-10 text-center text-sm text-slate-500">No completed patients yet.</p>
+      ) : (
+        <div className="space-y-3">
+          {patients.map(p => (
+            <div key={p.id} className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
+              <div className="flex items-center gap-3">
+                <span className={`rounded-lg px-2.5 py-1 text-xs font-bold tracking-wider ${CAT_STYLE[p.category].badge}`}>
+                  {displayNumber(p.ticketCode)}
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-white">{p.name}</p>
+                  <p className="text-xs text-slate-400">{p.age} y/o · {p.sex} · Arrived {p.arrivedAt}</p>
+                </div>
+                <p className="text-[11px] text-slate-500">Completed {formatDateTime(p.completedAt)}</p>
+              </div>
+              <div className="mt-3 space-y-1">
+                {p.chiefComplaints.map((c, i) => (
+                  <p key={i} className="text-xs text-slate-300">
+                    <span className="font-semibold text-white">{c.complaint}</span>
+                    {' · '}{c.duration || '—'}{' · '}{c.severity !== '' && c.severity != null ? c.severity : '—'}{' · '}{c.location || '—'}
+                  </p>
+                ))}
+              </div>
+              <div className="mt-3">
+                <VitalsGrid vitals={p.vitals} />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </ModalShell>
+  );
+}
+
+// ─── Login ────────────────────────────────────────────────────────────────────
 
 function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => string | null }) {
   const [staffId, setStaffId] = useState('');
@@ -421,98 +612,96 @@ function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => strin
   );
 }
 
+// ─── Root ─────────────────────────────────────────────────────────────────────
+
 interface ClinicDashboardProps {
   onBack: () => void;
+  /** Live patient data coming in (from your API / socket / Supabase / etc.) */
+  patients?: Patient[];
+  /** Called whenever the dashboard changes patient status (finish / call again) */
+  onPatientsChange?: (patients: Patient[]) => void;
 }
 
-export default function ClinicDashboard({ onBack }: ClinicDashboardProps) {
-  const [patients, setPatients] = useState<Patient[]>(SEED_PATIENTS);
+export default function ClinicDashboard({ onBack, patients: incoming, onPatientsChange }: ClinicDashboardProps) {
+  const [patients, setPatients] = useState<Patient[]>(() => promoteAll(incoming ?? []));
   const [activeClinic, setActiveClinic] = useState<Clinic | null>(null);
-  const [recentlyDone, setRecentlyDone] = useState<Patient[]>([]);
+  const [showCompleted, setShowCompleted] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
+
+  // Sync whenever new data arrives from outside
+  useEffect(() => {
+    if (incoming) setPatients(promoteAll(incoming));
+  }, [incoming]);
+
+  // Apply a change, auto-promote the next patient, and report it upstream
+  function commit(next: Patient[]) {
+    const promoted = promoteAll(next);
+    setPatients(promoted);
+    onPatientsChange?.(promoted);
+  }
 
   function handleLogin(id: string, code: string): string | null {
     const clinic = CLINICS.find(c => c.staffId === id);
     if (!clinic) return 'Staff ID not found.';
     if (code !== clinic.staffCode) return 'Incorrect access code.';
-    setRecentlyDone([]);
     setActiveClinic(clinic);
     return null;
   }
 
   function handleLogout() {
-    setRecentlyDone([]);
+    setShowCompleted(false);
+    setShowHistory(false);
     setActiveClinic(null);
   }
 
-  function handleClearLogs() {
-    setRecentlyDone([]);
-  }
-
-  const prevPatientsRef = React.useRef<Map<string, string>>(new Map());
-
-  useEffect(() => {
-    const prevMap = prevPatientsRef.current;
-    const nowDone = patients.filter(p => p.status === 'done' && prevMap.get(p.id) !== 'done');
-    if (nowDone.length > 0) {
-      setRecentlyDone(prev => [...nowDone, ...prev]);
-    }
-    const newMap = new Map<string, string>();
-    patients.forEach(p => newMap.set(p.id, p.status));
-    prevPatientsRef.current = newMap;
-  }, [patients]);
-
-  if (activeClinic) {
-    return (
-      <div className="min-h-screen bg-slate-900 text-slate-100">
-        <div className="max-w-7xl mx-auto px-4 py-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
-          <div className="lg:col-span-2">
-            <div className="mb-6">
-              <h2 className="text-3xl font-black text-white">OPD Specialized Clinic</h2>
-              <p className="text-sm text-slate-400">Streamlining Patient Intake</p>
-            </div>
-            <ClinicQueue clinic={activeClinic} allPatients={patients} onUpdate={setPatients} />
-          </div>
-
-          <aside className="lg:col-span-1">
-            <div className="rounded-2xl border border-slate-700 bg-slate-800/50 p-4 sticky top-6 space-y-4">
-              <div>
-                <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">Recently Completed</p>
-                <p className="mt-1 text-3xl font-black text-white">{recentlyDone.length}</p>
-              </div>
-              <div className="rounded-2xl border border-slate-700 bg-slate-900/60 p-3">
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-sm font-bold text-slate-300">Recent completions</h3>
-                  {recentlyDone.length > 0 && (
-                    <button onClick={handleClearLogs} className="text-[11px] font-semibold uppercase tracking-[0.2em] text-cyan-300 hover:text-white">
-                      Clear
-                    </button>
-                  )}
-                </div>
-                {recentlyDone.length === 0 ? (
-                  <p className="text-xs text-slate-500">No recent completions</p>
-                ) : (
-                  <ul className="space-y-3 max-h-[420px] overflow-y-auto">
-                    {recentlyDone.map(p => (
-                      <li key={p.id} className="rounded-lg bg-slate-800 p-3 border border-slate-700">
-                        <p className="font-semibold text-white truncate">{p.name}</p>
-                        <p className="text-xs text-slate-400">{p.ticketCode} · Arrived {p.arrivedAt}</p>
-                        <p className="text-[11px] text-slate-500 mt-1">Completed {p.completedAt ?? '—'}</p>
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </div>
-          </aside>
-        </div>
-        <div className="fixed bottom-4 left-4 z-50">
-          <button onClick={handleLogout} className="flex h-11 w-11 items-center justify-center rounded-full border border-slate-600 bg-slate-900 text-sm font-black text-white shadow-lg hover:bg-slate-800">
-            E
-          </button>
-        </div>
-      </div>
+  // Call a completed patient again: they become "serving";
+  // whoever was being served goes back to waiting and keeps their place in line
+  function handleCallAgain(patient: Patient) {
+    commit(
+      patients.map(p => {
+        if (p.id === patient.id) return { ...p, status: 'serving' as const, completedAt: undefined };
+        if (p.clinic === patient.clinic && p.status === 'serving') return { ...p, status: 'waiting' as const };
+        return p;
+      })
     );
+    setShowCompleted(false);
   }
 
-  return <ClinicLogin onLogin={handleLogin} />;
+  if (!activeClinic) return <ClinicLogin onLogin={handleLogin} />;
+
+  const completed = patients
+    .filter(p => p.clinic === activeClinic.code && p.status === 'done')
+    .sort((a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime());
+
+  return (
+    <div className="min-h-screen bg-slate-900 text-slate-100">
+      <div className="max-w-7xl mx-auto px-4 py-6">
+        {/* Top bar: title (left) + completed button & 3-bar menu (right) */}
+        <div className="mb-6 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="text-3xl font-black text-white">OPD Specialized Clinic</h2>
+            <p className="text-sm text-slate-400">Streamlining Patient Intake</p>
+          </div>
+          <div className="flex items-center gap-3">
+            <CompletedButton count={completed.length} onClick={() => setShowCompleted(true)} />
+            <MenuButton onHistory={() => setShowHistory(true)} onLogout={handleLogout} />
+          </div>
+        </div>
+
+        <ClinicQueue clinic={activeClinic} allPatients={patients} onUpdate={commit} />
+      </div>
+
+      {showCompleted && (
+        <CompletedModal
+          clinic={activeClinic}
+          patients={completed}
+          onClose={() => setShowCompleted(false)}
+          onCallAgain={handleCallAgain}
+        />
+      )}
+      {showHistory && (
+        <HistoryModal clinic={activeClinic} patients={completed} onClose={() => setShowHistory(false)} />
+      )}
+    </div>
+  );
 }

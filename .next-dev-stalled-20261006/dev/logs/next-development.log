@@ -1,0 +1,3 @@
+{"timestamp":"00:00:07.190","source":"Server","level":"LOG","message":""}
+{"timestamp":"00:00:14.316","source":"Server","level":"LOG","message":"○ Compiling / ..."}
+{"timestamp":"00:02:23.520","source":"Server","level":"LOG","message":"✓ Finished writing to filesystem cache in 10.6s"}
