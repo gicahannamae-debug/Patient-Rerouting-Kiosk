@@ -1,5 +1,6 @@
 'use client'
 import React, { useMemo, useState } from "react";
+import KioskHeader from "@/Component/kioskHeader";
 
 const SPO2_CATEGORIES = [
   { label: "Normal", range: "95% – 100%", min: 95, max: 101, color: "bg-green-400" },
@@ -17,11 +18,18 @@ const HR_CATEGORIES = [
 ];
 
 interface VsOximeterProps {
-  onBack?: () => void;
+  onLogout?: () => void;
   onProceed?: (values: { spo2: string; hr: string }) => void;
+  onNavigateStep?: (step: number) => void;
+  onNavigateVitalPart?: (part: number) => void;
 }
 
-export default function vsOximeter({ onBack, onProceed }: VsOximeterProps) {
+export default function vsOximeter({
+  onLogout,
+  onProceed,
+  onNavigateStep,
+  onNavigateVitalPart,
+}: VsOximeterProps) {
   const [spo2, setSpo2] = useState("");
   const [heartRate, setHeartRate] = useState("");
   const [alertTriggered, setAlertTriggered] = useState(false);
@@ -53,7 +61,7 @@ export default function vsOximeter({ onBack, onProceed }: VsOximeterProps) {
 
   return (
 
-    <div className="">
+    <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
       {showCriticalOximeterOverlay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950 bg-opacity-95 p-6">
           <div className="w-full max-w-4xl bg-red-600 border-4 border-white rounded-xl p-10 text-center shadow-2xl animate-pulse">
@@ -76,32 +84,16 @@ export default function vsOximeter({ onBack, onProceed }: VsOximeterProps) {
         </div>
       )}
 
-      {/* ── NAV ── */}
-      <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-yellow-50">
-        <div className="container mx-auto flex items-center justify-between">
-
-          <div className="flex flex-col">
-            <h1 className="text-2xl font-bold">BICA</h1>
-            <p className="w-full">Better Informed Care Access</p>
-          </div>
-
-          <div className="pr-[2rem]">
-            <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
-              <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Vital Signs |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
-            </ul>
-            <div className="md:hidden">
-              <a className="text-4xl font-semibold" href="#">&#8801;</a>
-            </div>
-          </div>
-
-        </div>
-      </nav>
+      <KioskHeader
+        activeStep={4}
+        vitalPart={2}
+        onNavigateStep={onNavigateStep}
+        onNavigateVitalPart={onNavigateVitalPart}
+        onLogout={onLogout}
+      />
 
       {/* ── MAIN ── */}
-      <div className="min-h-screen flex flex-col gap-[1.5rem] items-center justify-center bg-cyan-950 py-[3rem]">
+      <div className="flex-1 flex flex-col gap-[1.5rem] items-center justify-center bg-cyan-950 py-[3rem]">
 
         {/* Header */}
         <div className="flex flex-col text-center justify-center">
@@ -209,15 +201,6 @@ export default function vsOximeter({ onBack, onProceed }: VsOximeterProps) {
 
               {/* Buttons */}
               <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">
-
-                <button
-                  type="button"
-                  onClick={() => onBack?.()}
-                  className="text-[1rem] font-semibold bg-transparent text-orange-50 border border-orange-100 px-[1.5rem] py-[0.5rem] rounded-md hover:bg-cyan-800 cursor-pointer"
-                >
-                  ← Back
-                </button>
-
                 <button
                   type="submit"
                   className="text-[1.1rem] font-semibold bg-orange-50 text-cyan-950 px-[2.5rem] py-[0.5rem] rounded-md hover:bg-orange-100 cursor-pointer"

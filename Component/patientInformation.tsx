@@ -1,5 +1,6 @@
 'use client'
 import React from "react";
+import KioskHeader from "@/Component/kioskHeader";
 
 export interface PatientInfoValues {
   lastName: string;
@@ -17,41 +18,19 @@ export interface PatientInfoValues {
 }
 
 interface PatientInformationProps {
-  onBack?: () => void;
+  onLogout?: () => void;
   onProceed?: (values: PatientInfoValues) => void;
+  onNavigateStep?: (step: number) => void;
 }
 
-export default function PatientInformation({ onBack, onProceed }: PatientInformationProps) {
+export default function PatientInformation({ onLogout, onProceed, onNavigateStep }: PatientInformationProps) {
   return (
 
-    <div className="">
-
-      {/* ── NAV ── */}
-      <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-orange-50">
-        <div className="container mx-auto flex items-center justify-between">
-
-          <div className="flex flex-col">
-            <h1 className="text-2xl font-bold">BICA</h1>
-            <p className="w-full">Better Informed Care Access</p>
-          </div>
-
-          <div className="pr-[2rem]">
-            <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
-              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Triage Form |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
-            </ul>
-            <div className="md:hidden">
-              <a className="text-4xl font-semibold" href="#">&#8801;</a>
-            </div>
-          </div>
-
-        </div>
-      </nav>
+    <div className="min-h-screen bg-cyan-950 flex flex-col font-sans">
+      <KioskHeader activeStep={3} onNavigateStep={onNavigateStep} onLogout={onLogout} />
 
       {/* ── MAIN ── */}
-      <div className="min-h-screen flex flex-col gap-[1.5rem] items-center justify-center bg-cyan-950 py-[3rem]">
+      <div className="flex-1 flex flex-col gap-[1.5rem] items-center justify-center bg-cyan-950 py-[3rem]">
 
         {/* Header */}
         <div className="flex flex-col text-center justify-center">
@@ -236,16 +215,8 @@ export default function PatientInformation({ onBack, onProceed }: PatientInforma
             {/* ── BUTTONS — centered, not full width ── */}
           <div className="flex justify-center gap-[1rem] pt-[0.5rem]">
 
-            <button
-              type="button"
-              onClick={() => onBack?.()}
-              className="text-[1.1rem] font-semibold bg-transparent text-yellow-50 border border-yellow-100 px-[2rem] py-[0.6rem] rounded-md hover:bg-cyan-800 cursor-pointer"
-            >
-              ← Back
-            </button>
-
-            <button
-              type="submit"
+              <button
+                type="submit"
               className="text-[1.3rem] font-semibold bg-yellow-50 text-cyan-950 px-[3rem] py-[0.6rem] rounded-md hover:bg-yellow-100 cursor-pointer"
             >
               Proceed

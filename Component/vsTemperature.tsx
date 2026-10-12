@@ -1,5 +1,6 @@
 'use client'
 import React, { useMemo, useState } from "react";
+import KioskHeader from "@/Component/kioskHeader";
 
 const TEMPERATURE_CATEGORIES = [
   { label: "🔴 CRITICAL LOW", range: "< 35.0 °C", min: Number.NEGATIVE_INFINITY, max: 35.0, color: "bg-red-600" },
@@ -11,11 +12,18 @@ const TEMPERATURE_CATEGORIES = [
 ];
 
 interface VsTemperatureProps {
-  onBack?: () => void;
+  onLogout?: () => void;
   onProceed?: (values: { temperature: string }) => void;
+  onNavigateStep?: (step: number) => void;
+  onNavigateVitalPart?: (part: number) => void;
 }
 
-export default function VsTemperature({ onBack, onProceed }: VsTemperatureProps) {
+export default function VsTemperature({
+  onLogout,
+  onProceed,
+  onNavigateStep,
+  onNavigateVitalPart,
+}: VsTemperatureProps) {
   const [temperature, setTemperature] = useState("");
   const [alertTriggered, setAlertTriggered] = useState(false);
 
@@ -37,7 +45,7 @@ export default function VsTemperature({ onBack, onProceed }: VsTemperatureProps)
   const showCriticalTempOverlay = alertTriggered && !!criticalTempMessage;
 
   return (
-    <div className="">
+    <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
       {showCriticalTempOverlay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950 bg-opacity-95 p-6">
           <div className="w-full max-w-4xl bg-red-600 border-4 border-white rounded-xl p-10 text-center shadow-2xl animate-pulse">
@@ -58,26 +66,16 @@ export default function VsTemperature({ onBack, onProceed }: VsTemperatureProps)
           </div>
         </div>
       )}
-      {/* ── NAV ── */}
-      <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-yellow-50">
-        <div className="container mx-auto flex items-center justify-between">
-          <div className="flex flex-col">
-            <h1 className="text-2xl font-bold">BICA</h1>
-            <p className="w-full">Better Informed Care Access</p>
-          </div>
-          <div className="pr-[2rem]">
-            <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
-              <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Vital Signs |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
-            </ul>
-          </div>
-        </div>
-      </nav>
+      <KioskHeader
+        activeStep={4}
+        vitalPart={3}
+        onNavigateStep={onNavigateStep}
+        onNavigateVitalPart={onNavigateVitalPart}
+        onLogout={onLogout}
+      />
 
       {/* ── MAIN ── */}
-      <div className="min-h-screen flex flex-col gap-[1.5rem] items-center justify-center bg-cyan-950 py-[3rem]">
+      <div className="flex-1 flex flex-col gap-[1.5rem] items-center justify-center bg-cyan-950 py-[3rem]">
         <div className="flex flex-col text-center justify-center">
           <h1 className="text-[3rem] font-bold text-white">Vital Sign Measurement</h1>
           <p className="text-[1.7rem] font-serif text-white">Patient Temperature (T)</p>
@@ -161,13 +159,6 @@ export default function VsTemperature({ onBack, onProceed }: VsTemperatureProps)
 
               {/* Buttons */}
               <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">
-                <button
-                  type="button"
-                  onClick={() => onBack?.()}
-                  className="text-[1rem] font-semibold bg-transparent text-orange-50 border border-orange-100 px-[1.5rem] py-[0.5rem] rounded-md hover:bg-cyan-800 cursor-pointer"
-                >
-                  ← Back
-                </button>
                 <button type="submit" className="text-[1.1rem] font-semibold bg-orange-50 text-cyan-950 px-[2.5rem] py-[0.5rem] rounded-md hover:bg-orange-100 cursor-pointer">Proceed</button>
               </div>
             </form>

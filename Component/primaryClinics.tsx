@@ -1,5 +1,6 @@
 'use client';
 import React, { useState } from "react";
+import KioskHeader from "@/Component/kioskHeader";
 
 // ─────────────────────────────────────────────────────────────────────────────
 // TYPES
@@ -426,26 +427,15 @@ const stepsFor = (c: Complaint | null): StepKey[] => [
 // UI COMPONENTS
 // ─────────────────────────────────────────────────────────────────────────────
 
-function NavBar() {
-  return (
-    <nav className="flex w-full items-center justify-between bg-yellow-50 px-8 py-4 shadow-sm">
-      <div>
-        <h1 className="text-2xl font-bold leading-tight text-cyan-950">BICA</h1>
-        <p className="text-xs text-cyan-800">Better Informed Care Access</p>
-      </div>
-      <ul className="hidden space-x-6 text-sm font-semibold text-cyan-900 md:flex">
-        <li><a href="#" className="hover:underline">Triage Form |</a></li>
-        <li><a href="#" className="hover:underline">Vital Signs |</a></li>
-        <li><a href="#" className="text-orange-600 underline">Chief Complaints |</a></li>
-        <li><a href="#" className="hover:underline">Summary |</a></li>
-      </ul>
-    </nav>
-  );
-}
-
 function Breadcrumb({
-  steps, current, category, complaint,
-}: { steps: StepKey[]; current: StepKey; category: Category | null; complaint: Complaint | null }) {
+  steps, current, category, complaint, onNavigate,
+}: {
+  steps: StepKey[];
+  current: StepKey;
+  category: Category | null;
+  complaint: Complaint | null;
+  onNavigate: (step: StepKey) => void;
+}) {
   const labels: Record<StepKey, string> = {
     category: category?.shortLabel ?? "Concern Area",
     complaint: complaint?.label ?? "Chief Complaint",
@@ -461,14 +451,27 @@ function Breadcrumb({
         const active = i === activeIdx;
         return (
           <React.Fragment key={s}>
-            <span
-              className={`rounded-full border px-3 py-1 text-xs font-semibold
+            {done ? (
+              <button
+                type="button"
+                onClick={() => onNavigate(s)}
+                className={`cursor-pointer rounded-full border px-3 py-1 text-xs font-semibold hover:underline
+                  ${done ? "border-emerald-500 bg-emerald-950 text-emerald-400"
+                  : active ? "border-orange-300 bg-cyan-950 text-orange-200"
+                  : "border-cyan-800 text-cyan-600"}`}
+              >
+                ✓ {labels[s]}
+              </button>
+            ) : (
+              <span
+                className={`rounded-full border px-3 py-1 text-xs font-semibold
                 ${done ? "border-emerald-500 bg-emerald-950 text-emerald-400"
                 : active ? "border-orange-300 bg-cyan-950 text-orange-200"
                 : "border-cyan-800 text-cyan-600"}`}
-            >
-              {done && "✓ "}{labels[s]}
-            </span>
+              >
+                {labels[s]}
+              </span>
+            )}
             {i < steps.length - 1 && <span className="text-sm text-cyan-700">›</span>}
           </React.Fragment>
         );
@@ -725,11 +728,18 @@ function StepSeverity({
 // ─────────────────────────────────────────────────────────────────────────────
 
 interface PrimaryClinicsProps {
-  onBack?: () => void;
+  onLogout?: () => void;
   onProceed?: (payload: PrimaryClinicsPayload) => void;
+  onNavigateStep?: (step: number) => void;
+  onNavigateVitalPart?: (part: number) => void;
 }
 
-export default function PrimaryClinics({ onBack, onProceed }: PrimaryClinicsProps) {
+export default function PrimaryClinics({
+  onLogout,
+  onProceed,
+  onNavigateStep,
+  onNavigateVitalPart,
+}: PrimaryClinicsProps) {
   const [stepKey, setStepKey] = useState<StepKey>("category");
   const [category, setCategory] = useState<Category | null>(null);
   const [complaint, setComplaint] = useState<Complaint | null>(null);
@@ -796,18 +806,17 @@ export default function PrimaryClinics({ onBack, onProceed }: PrimaryClinicsProp
     setStepKey(steps[stepIdx + 1]);
   };
 
-  const handleBack = () => {
-    const prev = steps[stepIdx - 1];
-    if (!prev) return;
-    if (prev === "category") {
+  const handleWizardNavigate = (target: StepKey) => {
+    if (steps.indexOf(target) >= stepIdx) return;
+    if (target === "category") {
       setCategory(null);
       setComplaint(null);
       resetDetails();
-    } else if (prev === "complaint") {
+    } else if (target === "complaint") {
       setComplaint(null);
       resetDetails();
     }
-    setStepKey(prev);
+    setStepKey(target);
   };
 
   // ── Payload ─────────────────────────────────────────────────────────────────
@@ -860,24 +869,27 @@ export default function PrimaryClinics({ onBack, onProceed }: PrimaryClinicsProp
   };
 
   return (
-    <div>
-      <NavBar />
+    <div className="min-h-screen bg-cyan-950 flex flex-col font-sans">
+      <KioskHeader
+        activeStep={5}
+        onNavigateStep={onNavigateStep}
+        onNavigateVitalPart={onNavigateVitalPart}
+        onLogout={onLogout}
+      />
 
-      <div className="flex min-h-screen flex-col items-center gap-6 bg-cyan-950 px-4 py-8">
-        {onBack && stepKey === "category" && (
-          <div className="w-full max-w-[72rem] pl-4">
-            <button onClick={onBack} className="cursor-pointer text-sm text-white/80 hover:text-white">
-              ← Back
-            </button>
-          </div>
-        )}
-
+      <div className="flex flex-1 flex-col items-center gap-6 bg-cyan-950 px-4 py-8">
         <div className="text-center">
           <p className="mb-1 text-sm font-bold uppercase tracking-widest text-orange-300">Chief Complaints</p>
           <h1 className="text-4xl font-bold text-white">Tell us about your concern</h1>
         </div>
 
-        <Breadcrumb steps={steps} current={stepKey} category={category} complaint={complaint} />
+        <Breadcrumb
+          steps={steps}
+          current={stepKey}
+          category={category}
+          complaint={complaint}
+          onNavigate={handleWizardNavigate}
+        />
 
         <div className="flex w-[72rem] max-w-full flex-row gap-6 rounded-2xl bg-cyan-900 px-8 py-8">
           <div className="min-w-0 flex-1">
@@ -926,16 +938,6 @@ export default function PrimaryClinics({ onBack, onProceed }: PrimaryClinicsProp
                       : "cursor-not-allowed bg-cyan-800 text-cyan-500"}`}
                 >
                   {stepKey === "severity" ? "Proceed →" : "Continue →"}
-                </button>
-              )}
-
-              {stepIdx > 0 && (
-                <button
-                  type="button"
-                  onClick={handleBack}
-                  className="cursor-pointer rounded-xl border border-orange-200 bg-transparent px-5 py-2.5 text-sm font-semibold text-orange-100 hover:bg-cyan-800"
-                >
-                  ← Back
                 </button>
               )}
 

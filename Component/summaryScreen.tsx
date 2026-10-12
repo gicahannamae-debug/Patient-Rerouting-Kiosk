@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useRef, useState } from "react";
 import type { TicketMetadata } from "./summaryTypes";
+import KioskHeader from "@/Component/kioskHeader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -32,6 +33,9 @@ interface SummaryScreenProps {
   ticketMetadata?: TicketMetadata;
   /** Called after printing finishes -> parent resets to the welcome screen */
   onFinish: () => void;
+  onLogout?: () => void;
+  onNavigateStep?: (step: number) => void;
+  onNavigateVitalPart?: (part: number) => void;
   /** Optional thermal printer handler. Falls back to browser printing. */
   onPrintTicket?: (payload: { queueCode: string; imageDataUrl: string }) => void | Promise<void>;
 }
@@ -293,6 +297,9 @@ export default function SummaryScreen({
   time,
   ticketMetadata,
   onFinish,
+  onLogout,
+  onNavigateStep,
+  onNavigateVitalPart,
   onPrintTicket,
 }: SummaryScreenProps) {
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
@@ -368,11 +375,12 @@ export default function SummaryScreen({
         }
       `}</style>
 
-      {/* HEADER */}
-      <nav className="w-full px-8 py-4 bg-yellow-50 shadow-md">
-        <h1 className="text-3xl font-extrabold tracking-wide text-cyan-950">BICA</h1>
-        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-800">Better Informed Care Access</p>
-      </nav>
+      <KioskHeader
+        activeStep={6}
+        onNavigateStep={onNavigateStep}
+        onNavigateVitalPart={onNavigateVitalPart}
+        onLogout={onLogout}
+      />
 
       {/* MAIN */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 py-8">

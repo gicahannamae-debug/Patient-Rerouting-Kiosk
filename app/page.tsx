@@ -182,13 +182,20 @@ export default function Home() {
     if (typeof window !== 'undefined') sessionStorage.removeItem('operatorAuth');
   };
 
+  const handleKioskLogout = () => {
+    handleOperatorLogout();
+    if (typeof window !== "undefined") sessionStorage.removeItem("bica_emergency");
+    resetFormState();
+    setStep("safety");
+    setViewMode("selector");
+  };
+
   const handleBackToMode = () => {
     setViewMode("selector");
     setStep("safety");
   };
 
   // ── Safety check ────────────────────────────────────────────────────────────
-  const handleSafetyBack = () => setViewMode("selector"); // operator log out
   const handleSafetyProceed = () => setStep("patientForm"); // "NONE apply" → straight to triage form
 
   const handleEmergencyAlert = (alert: EmergencyAlert) => {
@@ -198,8 +205,6 @@ export default function Home() {
   };
 
   // ── Triage form ─────────────────────────────────────────────────────────────
-  const handlePatientFormBack = () => setStep("safety");
-
   const handlePatientFormProceed = (values?: PatientInfo) => {
     if (values) setPatientInfo(values);
     setVitalStage("bp");
@@ -207,16 +212,6 @@ export default function Home() {
   };
 
   // ── Vitals ──────────────────────────────────────────────────────────────────
-  const handleVitalBack = () => {
-    if (vitalStage === "bp") {
-      setStep("patientForm");
-    } else if (vitalStage === "oximetry") {
-      setVitalStage("bp");
-    } else {
-      setVitalStage("oximetry");
-    }
-  };
-
   const handleVitalProceed = (values?: VitalPayload) => {
     if (values) {
       setVitals((prev) => ({ ...prev, ...values }));
@@ -230,8 +225,24 @@ export default function Home() {
     }
   };
 
-  // ── Chief complaints ────────────────────────────────────────────────────────
-  const handlePrimaryClinicsBack = () => setStep("vitals");
+  // ── Header navigation ───────────────────────────────────────────────────────
+  const handleNavigateStep = (targetStep: number) => {
+    if (targetStep <= 1) {
+      setStep("safety");
+    } else if (targetStep <= 3) {
+      setStep("patientForm");
+    } else if (targetStep === 4) {
+      setVitalStage("temperature");
+      setStep("vitals");
+    } else if (targetStep === 5) {
+      setStep("primaryClinics");
+    }
+  };
+
+  const handleNavigateVitalPart = (part: number) => {
+    setVitalStage(part === 1 ? "bp" : part === 2 ? "oximetry" : "temperature");
+    setStep("vitals");
+  };
 
   const handlePrimaryClinicsProceed = (payload: PrimaryClinicPayload) => {
     const clinic = payload?.clinic ?? selectedClinic ?? "Family Medicine";
@@ -290,30 +301,52 @@ export default function Home() {
           <>
             {step === "safety" && (
               <CcRedflag
-                onBack={handleSafetyBack}
+                onLogout={handleKioskLogout}
                 onProceed={handleSafetyProceed}
+                onNavigateStep={handleNavigateStep}
                 onEmergencyAlert={handleEmergencyAlert}
               />
             )}
 
             {step === "patientForm" && (
-              <PatientInformation onBack={handlePatientFormBack} onProceed={handlePatientFormProceed} />
+              <PatientInformation
+                onLogout={handleKioskLogout}
+                onProceed={handlePatientFormProceed}
+                onNavigateStep={handleNavigateStep}
+              />
             )}
 
             {step === "vitals" && vitalStage === "bp" && (
-              <VsBloodpressure onBack={handleVitalBack} onProceed={handleVitalProceed} />
+              <VsBloodpressure
+                onLogout={handleKioskLogout}
+                onProceed={handleVitalProceed}
+                onNavigateStep={handleNavigateStep}
+                onNavigateVitalPart={handleNavigateVitalPart}
+              />
             )}
             {step === "vitals" && vitalStage === "oximetry" && (
-              <VsOximeter onBack={handleVitalBack} onProceed={handleVitalProceed} />
+              <VsOximeter
+                onLogout={handleKioskLogout}
+                onProceed={handleVitalProceed}
+                onNavigateStep={handleNavigateStep}
+                onNavigateVitalPart={handleNavigateVitalPart}
+              />
             )}
             {step === "vitals" && vitalStage === "temperature" && (
-              <VsTemperature onBack={handleVitalBack} onProceed={handleVitalProceed} />
+              <VsTemperature
+                onLogout={handleKioskLogout}
+                onProceed={handleVitalProceed}
+                onNavigateStep={handleNavigateStep}
+                onNavigateVitalPart={handleNavigateVitalPart}
+              />
             )}
 
             {step === "primaryClinics" && (
               <PrimaryClinics
-                onBack={handlePrimaryClinicsBack}
+                onLogout={handleKioskLogout}
                 onProceed={handlePrimaryClinicsProceed}
+                onNavigateStep={handleNavigateStep}
+                onNavigateVitalPart={handleNavigateVitalPart}
               />
             )}
 
@@ -342,6 +375,9 @@ export default function Home() {
                 referralPurpose=""
                 referralDiagnosis=""
                 ticketMetadata={TICKET_METADATA}
+                onLogout={handleKioskLogout}
+                onNavigateStep={handleNavigateStep}
+                onNavigateVitalPart={handleNavigateVitalPart}
                 onFinish={handleFinish}
               />
             )}

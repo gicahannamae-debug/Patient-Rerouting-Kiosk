@@ -1,5 +1,6 @@
 'use client'
 import React, { useMemo, useState } from "react";
+import KioskHeader from "@/Component/kioskHeader";
 
 const BP_CATEGORIES = [
   { label: "🔴 CRITICAL LOW", range: "< 90 / < 60", predicate: (s: number, d: number) => s < 90 && d < 60, color: "bg-red-600" },
@@ -12,11 +13,21 @@ const BP_CATEGORIES = [
 ];
 
 interface VsBloodpressureProps {
-  onBack?: () => void;
+  onLogout?: () => void;
   onProceed?: (values: { bpSys: string; bpDia: string }) => void;
+  onNavigateStep?: (step: number) => void;
+  onNavigateVitalPart?: (part: number) => void;
+  /** Which vital-sign part this page is (1 = BP). Use 2 / 3 on the RR&O2 and Temp pages. */
+  part?: number;
 }
 
-export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressureProps) {
+export default function VsBloodpressure({
+  onLogout,
+  onProceed,
+  onNavigateStep,
+  onNavigateVitalPart,
+  part = 1,
+}: VsBloodpressureProps) {
   const [systolic, setSystolic] = useState("");
   const [diastolic, setDiastolic] = useState("");
   const [alertTriggered, setAlertTriggered] = useState(false);
@@ -41,8 +52,7 @@ export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressurePr
   const showCriticalBpOverlay = alertTriggered && !!criticalBpMessage;
 
   return (
-
-    <div className="">
+    <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
       {showCriticalBpOverlay && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950 bg-opacity-95 p-6">
           <div className="w-full max-w-4xl bg-red-600 border-4 border-white rounded-xl p-10 text-center shadow-2xl animate-pulse">
@@ -65,49 +75,30 @@ export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressurePr
         </div>
       )}
 
-      {/* ── NAV ── */}
-      <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-yellow-50">
-        <div className="container mx-auto flex items-center justify-between">
+      <KioskHeader
+        activeStep={4}
+        vitalPart={part}
+        onNavigateStep={onNavigateStep}
+        onNavigateVitalPart={onNavigateVitalPart}
+        onLogout={onLogout}
+      />
 
-          <div className="flex flex-col">
-            <h1 className="text-2xl font-bold">BICA</h1>
-            <p className="w-full">Better Informed Care Access</p>
-          </div>
-
-          <div className="pr-[2rem]">
-            <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
-              <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline ">Vital Signs |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Summary |</a></li>
-            </ul>
-            <div className="md:hidden">
-              <a className="text-4xl font-semibold" href="#">&#8801;</a>
-            </div>
-          </div>
-
-        </div>
-      </nav>
-
-      {/* ── MAIN ── */}
-      <div className="min-h-screen flex flex-col gap-[1.5rem] items-center justify-center bg-cyan-950 py-[3rem]">
-
-        {/* Header */}
-        <div className="flex flex-col text-center justify-center">
-          <h1 className="text-[3rem] font-bold text-white">Vital Sign Measurement</h1>
-          <p className="text-[1.7rem] font-serif text-white">Patient Blood Pressure (BP)</p>
+      {/* MAIN */}
+      <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-6xl mx-auto w-full">
+        {/* Heading (same as Safety Check) */}
+        <div className="text-center w-full mb-6">
+          <h2 className="text-5xl font-bold text-white">Vital Sign Measurement</h2>
+          <p className="text-2xl text-cyan-200 mt-2">Patient Blood Pressure (BP)</p>
         </div>
 
         {/* ── CONTENT CARD ── */}
-        <div className="flex flex-row gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]">
+        <div className="flex w-full flex-row gap-6 rounded-3xl border border-cyan-500/30 bg-cyan-900/30 p-8 shadow-2xl backdrop-blur-sm">
 
           {/* ── LEFT: Procedure Steps ── */}
-          <div className="flex flex-col gap-[0.8rem] flex-1 border border-dashed border-cyan-600 rounded-lg p-[1.5rem]">
-
+          <div className="flex flex-col gap-[0.8rem] flex-1 border border-dashed border-cyan-600 rounded-2xl p-[1.5rem]">
             <h2 className="text-[1.4rem] font-bold text-white">Procedure</h2>
             <p className="text-[1.3rem] text-cyan-300">Please follow the instructions below to take your Blood Pressure reading.</p>
 
-            {/* Steps */}
             {[
               "Pick up the Blood Pressure Cuff located on the right side of the kiosk.",
               "Wrap the cuff snugly around your upper arm, about 2 cm above the elbow.",
@@ -127,7 +118,6 @@ export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressurePr
 
           {/* ── RIGHT: Input Form ── */}
           <div className="flex flex-col gap-[1rem] w-[22rem] flex-shrink-0">
-
             <div className="flex flex-col text-center justify-center">
               <h2 className="text-[1.4rem] font-bold text-white">Blood Pressure Reading</h2>
               <p className="text-[0.9rem] text-cyan-300">Enter the values shown on the BP machine.</p>
@@ -141,9 +131,8 @@ export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressurePr
                   onProceed?.({ bpSys: systolic, bpDia: diastolic });
                 }
               }}
-              className="flex flex-col gap-[1rem] bg-cyan-950 rounded-lg p-[1rem]"
+              className="flex flex-col gap-[1rem] bg-cyan-950 rounded-2xl p-[1rem]"
             >
-
               <section className="flex flex-col gap-[0.25rem]">
                 <label className="text-[1.1rem] font-semibold text-white">
                   Systolic (mmHg) <span className="text-red-400">*</span>
@@ -199,14 +188,6 @@ export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressurePr
               {/* Buttons */}
               <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">
                 <button
-                  type="button"
-                  onClick={() => onBack?.()}
-                  className="text-[1rem] font-semibold bg-transparent text-orange-50 border border-orange-100 px-[1.5rem] py-[0.5rem] rounded-md hover:bg-cyan-800 cursor-pointer"
-                >
-                  ← Back
-                </button>
-
-                <button
                   type="submit"
                   className="text-[1.1rem] font-semibold bg-orange-50 text-cyan-950 px-[2.5rem] py-[0.5rem] rounded-md hover:bg-orange-100 cursor-pointer"
                 >
@@ -217,6 +198,11 @@ export default function VsBloodpressure({ onBack, onProceed }: VsBloodpressurePr
           </div>
         </div>
       </div>
+
+      {/* FOOTER */}
+      <footer className="w-full py-4 px-8 text-center text-cyan-300/60 text-sm border-t border-cyan-900">
+        BICA Outpatient Self-Service Kiosk • Northern Mindanao Medical Center
+      </footer>
     </div>
   );
 }

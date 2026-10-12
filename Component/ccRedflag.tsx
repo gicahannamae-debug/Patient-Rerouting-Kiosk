@@ -1,5 +1,6 @@
 'use client';
 import React, { useEffect, useRef, useState } from "react";
+import KioskHeader from "@/Component/kioskHeader";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -36,8 +37,8 @@ export interface EmergencyPrintPayload {
 }
 
 interface CcRedflagProps {
-  onBack?: () => void;
   onLogout?: () => void;
+  onNavigateStep?: (step: number) => void;
   /** Called when the patient answers "NONE apply" (no emergency) */
   onProceed?: () => void;
   /** Called IMMEDIATELY when an emergency is selected (before printing) */
@@ -109,7 +110,6 @@ const STEPS = [
   "Ticket",
 ];
 const SAFETY_STEP_INDEX = 1;
-const SAFETY_PARTS = 2;
 
 /** Seconds on the ticket screen before returning to Welcome */
 const TICKET_SCREEN_SECONDS = 20;
@@ -295,8 +295,8 @@ function printImage(dataUrl: string): Promise<void> {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CcRedflag({
-  onBack,
   onLogout,
+  onNavigateStep,
   onProceed,
   onEmergencyAlert,
   onPrintEmergencyTicket,
@@ -307,7 +307,6 @@ export default function CcRedflag({
 
   const [view, setView] = useState<"categories" | "experiences">("categories");
   const [categoryId, setCategoryId] = useState<string | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
@@ -412,6 +411,16 @@ export default function CcRedflag({
     onEmergencyDone?.();
   };
 
+  const handleNavigateStep = (step: number) => {
+    if (step === 0) {
+      resetScreening();
+      setAlertData({ symptom: "", ticketNumber: "" });
+      setScreenStep("welcome");
+      return;
+    }
+    onNavigateStep?.(step);
+  };
+
   // Auto-return to Welcome after the ticket screen has been up for N seconds
   useEffect(() => {
     if (screenStep !== "erTicket") return;
@@ -419,14 +428,6 @@ export default function CcRedflag({
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [screenStep]);
-
-  const handleLogout = () => {
-    setMenuOpen(false);
-    if (typeof window !== "undefined") {
-      sessionStorage.removeItem("bica_emergency");
-    }
-    (onLogout ?? onBack)?.();
-  };
 
   // ── Progress indicator state ────────────────────────────────────────────────
 
@@ -438,20 +439,6 @@ export default function CcRedflag({
       : SAFETY_STEP_INDEX;
 
   const currentPart = view === "experiences" ? 2 : 1;
-
-  const circleState = (n: number): "done" | "current" | "future" => {
-    if (activeStep > SAFETY_STEP_INDEX) return "done";
-    if (activeStep < SAFETY_STEP_INDEX) return "future";
-    if (n < currentPart) return "done";
-    if (n === currentPart) return "current";
-    return "future";
-  };
-
-  const circleClass = {
-    done: "bg-cyan-950 text-yellow-50 border-cyan-950",
-    current: "bg-cyan-950 text-yellow-50 border-cyan-950 ring-2 ring-yellow-400 ring-offset-1 scale-110",
-    future: "bg-transparent text-cyan-950 border-cyan-950/40 blur-[2px] opacity-50",
-  };
 
   const statusText: Record<PrintStatus, string> = {
     idle: "",
@@ -489,95 +476,12 @@ export default function CcRedflag({
         }
       `}</style>
 
-      {/* TOP KIOSK HEADER */}
-      <nav className="relative z-30 w-full px-8 py-5 text-cyan-950 bg-yellow-50 shadow-md">
-        <div className="w-full flex items-center justify-between gap-6">
-          <div className="flex flex-col shrink-0">
-            <h1 className="text-4xl font-extrabold tracking-wide">BICA</h1>
-            <div className="flex items-center gap-2">
-              <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
-              <p className="text-sm font-semibold tracking-wider uppercase text-cyan-900">
-                Outpatient Department (OPD) Kiosk
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-5 min-w-0">
-            <ol className="flex flex-wrap items-center justify-end gap-x-2 gap-y-2 text-sm">
-              {STEPS.map((label, i) => {
-                const isActive = i === activeStep;
-                const isPast = i < activeStep;
-                return (
-                  <React.Fragment key={label}>
-                    {i > 0 && <li aria-hidden className="text-cyan-950/25 font-light select-none">|</li>}
-                    <li
-                      className={`flex items-center gap-2 transition-all duration-500 ${
-                        isActive
-                          ? "rounded-full bg-cyan-950 px-3 py-1 font-extrabold text-yellow-50"
-                          : isPast
-                          ? "px-1 font-semibold text-cyan-950"
-                          : "px-1 font-semibold text-cyan-950/40"
-                      }`}
-                    >
-                      <span>{label}</span>
-
-                      {i === SAFETY_STEP_INDEX && (
-                        <span className="flex items-center gap-1">
-                          {Array.from({ length: SAFETY_PARTS }, (_, k) => k + 1).map(n => {
-                            const state = circleState(n);
-                            return (
-                              <span
-                                key={n}
-                                className={`flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold transition-all duration-500 ${
-                                  isActive && state !== "future"
-                                    ? state === "current"
-                                      ? "bg-yellow-400 text-cyan-950 border-yellow-300 ring-2 ring-yellow-200 scale-110"
-                                      : "bg-yellow-50 text-cyan-950 border-yellow-50"
-                                    : circleClass[state]
-                                }`}
-                              >
-                                {n}
-                              </span>
-                            );
-                          })}
-                        </span>
-                      )}
-                    </li>
-                  </React.Fragment>
-                );
-              })}
-            </ol>
-
-            <div className="relative shrink-0">
-              <button
-                type="button"
-                onClick={() => setMenuOpen(v => !v)}
-                aria-label="Menu"
-                className="flex h-12 w-12 flex-col items-center justify-center gap-1.5 rounded-xl border border-cyan-950/30 bg-white hover:bg-cyan-50 transition-colors cursor-pointer"
-              >
-                <span className="block h-0.5 w-6 rounded bg-cyan-950" />
-                <span className="block h-0.5 w-6 rounded bg-cyan-950" />
-                <span className="block h-0.5 w-6 rounded bg-cyan-950" />
-              </button>
-
-              {menuOpen && (
-                <>
-                  <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-                  <div className="absolute right-0 top-full z-40 mt-2 w-56 overflow-hidden rounded-xl border border-cyan-950/20 bg-white shadow-2xl">
-                    <button
-                      type="button"
-                      onClick={handleLogout}
-                      className="block w-full px-4 py-3 text-left text-sm font-bold text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
-                    >
-                      Operator Log out
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          </div>
-        </div>
-      </nav>
+      <KioskHeader
+        activeStep={activeStep}
+        vitalPart={activeStep === SAFETY_STEP_INDEX ? currentPart : undefined}
+        onNavigateStep={handleNavigateStep}
+        onLogout={onLogout}
+      />
 
       {/* STEP 0: WELCOME */}
       {screenStep === "welcome" && (
