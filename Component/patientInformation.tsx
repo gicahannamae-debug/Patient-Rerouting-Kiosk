@@ -1,25 +1,27 @@
 'use client'
 import React from "react";
 
-interface PatientInformationProps {
-  onBack?: () => void;
-  onProceed?: (values: {
-    lastName: string;
-    firstName: string;
-    middleName: string;
-    pwdStatus: string;
-    birthdate: string;
-    age: string;
-    gender: string;
-    address: string;
-    birthplace: string;
-    religion: string;
-    civilStatus: string;
-    appointmentStatus: string;
-  }) => void;
+export interface PatientInfoValues {
+  lastName: string;
+  firstName: string;
+  middleName: string;
+  pwdStatus: string;
+  birthdate: string;
+  age: string;
+  gender: string;
+  address: string;
+  birthplace: string;
+  religion: string;
+  civilStatus: string;
+  appointmentStatus: string;
 }
 
-export default function patientInformation({ onBack, onProceed }: PatientInformationProps) {
+interface PatientInformationProps {
+  onBack?: () => void;
+  onProceed?: (values: PatientInfoValues) => void;
+}
+
+export default function PatientInformation({ onBack, onProceed }: PatientInformationProps) {
   return (
 
     <div className="">

@@ -1,338 +1,450 @@
-"use client"
-import React from "react";
-import SummaryNewPatient from "./SummaryNewPatient";
-import SummaryReturningPatient from "./SummaryReturningPatient";
-import SummaryReferredPatient from "./SummaryReferredPatient";
-import type { SummaryScreenProps, PatientStatus, TicketMetadata } from "./summaryTypes";
+'use client';
+import React, { useEffect, useRef, useState } from "react";
+import type { TicketMetadata } from "./summaryTypes";
 
-export type { SummaryScreenProps };
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-const defaultTicketMetadata: TicketMetadata = {
-  serviceTitle: "MEDICAL CONSULTATION",
-  ticketType: "consultation",
-  badgeColor: "bg-cyan-600 text-white",
-};
+interface SummaryScreenProps {
+  patientName: string;
+  age: string;
+  gender: string;
+  patientAddress: string;
+  pwdStatus: string;
+  bpSys: string;
+  bpDia: string;
+  hr: string;
+  spo2: string;
+  temperature: string;
+  complaints: string;
+  clinic: string;
+  destination: string;
+  queueCode: string;
+  date: string;
+  time: string;
+  patientStatus?: "new" | "returning" | "referred";
+  // Referral props are no longer used (new patients only) but stay optional
+  // so the parent doesn't break if it still passes them.
+  referralFrom?: string;
+  referralDoctor?: string;
+  referralDate?: string;
+  referralPurpose?: string;
+  referralDiagnosis?: string;
+  ticketMetadata?: TicketMetadata;
+  /** Called after printing finishes -> parent resets to the welcome screen */
+  onFinish: () => void;
+  /** Optional thermal printer handler. Falls back to browser printing. */
+  onPrintTicket?: (payload: { queueCode: string; imageDataUrl: string }) => void | Promise<void>;
+}
 
-export default function SummaryScreen(props: SummaryScreenProps & { onFinish?: () => void }) {
-  const {
-    patientName = "DELA CRUZ, JUAN S.",
-    age = "32",
-    gender = "Male",
-    patientAddress = "",
-    pwdStatus = "",
-    bpSys = "120",
-    bpDia = "80",
-    hr = "72",
-    spo2 = "98",
-    temperature = "36.8",
-    complaints = "Persistent Headache",
-    clinic = "Family Medicine",
-    destination = "Family Medicine",
-    queueCode = "FM-042",
-    date = "05/16/2026",
-    time = "08:42 AM",
-    patientStatus = "new",
-    referralFrom = "N/A",
-    referralDoctor = "N/A",
-    referralDate = "—",
-    referralPurpose = "—",
-    referralFormNo = "—",
-    referralDiagnosis = "—",
-    ticketMetadata = defaultTicketMetadata,
-    onFinish,
-  } = props as any;
+type Phase = "preview" | "printing" | "done" | "error";
 
-  const currentStatus: PatientStatus = patientStatus;
-  const activeTicket = ticketMetadata ?? defaultTicketMetadata;
-  const isSpecialService = activeTicket.ticketType === "lab" || activeTicket.ticketType === "followup" || activeTicket.ticketType === "ancillary";
+// ─── Timing ───────────────────────────────────────────────────────────────────
+
+/** Minimum seconds to show the "printing" state after tapping Print */
+const PRINTING_SECONDS = 6;
+/** Seconds to show "Ticket printed" before returning to the welcome screen */
+const DONE_SECONDS = 2;
+
+// ─── Receipt image ────────────────────────────────────────────────────────────
+// 80mm paper = 576 dots wide. For 58mm paper use RECEIPT_WIDTH = 384 and
+// PAPER_MM = "58mm".
+
+const RECEIPT_WIDTH = 576;
+const PAPER_MM = "80mm";
+
+interface ReceiptData {
+  serviceTitle: string;
+  patientName: string;
+  age: string;
+  gender: string;
+  address: string;
+  pwdStatus: string;
+  bpSys: string;
+  bpDia: string;
+  hr: string;
+  spo2: string;
+  temperature: string;
+  complaints: string;
+  clinic: string;
+  destination: string;
+  queueCode: string;
+  date: string;
+  time: string;
+}
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function buildReceiptImage(d: ReceiptData): string {
+  const W = RECEIPT_WIDTH;
+  const PAD = 24;
+  const FONT = '"Courier New", monospace';
+
+  const tall = document.createElement("canvas");
+  tall.width = W;
+  tall.height = 3200;
+  const ctx = tall.getContext("2d")!;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, W, tall.height);
+  ctx.fillStyle = "#000";
+  ctx.textBaseline = "top";
+
+  let y = PAD;
+
+  const centered = (str: string, size: number, weight = "bold") => {
+    ctx.textAlign = "center";
+    ctx.font = `${weight} ${size}px ${FONT}`;
+    for (const line of wrapText(ctx, str, W - PAD * 2)) {
+      ctx.fillText(line, W / 2, y);
+      y += size * 1.25;
+    }
+  };
+
+  const leftText = (str: string, size: number, weight = "bold") => {
+    ctx.textAlign = "left";
+    ctx.font = `${weight} ${size}px ${FONT}`;
+    for (const line of wrapText(ctx, str, W - PAD * 2)) {
+      ctx.fillText(line, PAD, y);
+      y += size * 1.25;
+    }
+  };
+
+  const dashed = () => {
+    y += 8;
+    ctx.setLineDash([10, 8]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#000";
+    ctx.beginPath();
+    ctx.moveTo(PAD, y);
+    ctx.lineTo(W - PAD, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    y += 16;
+  };
+
+  /** "LABEL ........ value" on one line, or stacked when the value is long */
+  const row = (label: string, value: string) => {
+    const v = value && value.trim() ? value : "N/A";
+    ctx.font = `normal 24px ${FONT}`;
+    const lw = ctx.measureText(`${label} `).width;
+    ctx.font = `bold 24px ${FONT}`;
+    const vw = ctx.measureText(v).width;
+    if (lw + vw + 16 <= W - PAD * 2) {
+      ctx.textAlign = "left";
+      ctx.font = `normal 24px ${FONT}`;
+      ctx.fillText(label, PAD, y);
+      ctx.textAlign = "right";
+      ctx.font = `bold 24px ${FONT}`;
+      ctx.fillText(v, W - PAD, y);
+      y += 34;
+    } else {
+      leftText(label, 24, "normal");
+      leftText(v, 26);
+      y += 6;
+    }
+  };
+
+  // Header
+  centered("BICA", 60);
+  centered("Better Informed Care Access", 22, "normal");
+  y += 4;
+  centered(d.serviceTitle, 26);
+  dashed();
+
+  // Date / time
+  row("DATE:", d.date);
+  row("TIME:", d.time);
+  dashed();
+
+  // Queue number (white on black block)
+  centered("QUEUE NUMBER", 24, "normal");
+  let size = 96;
+  ctx.font = `bold ${size}px ${FONT}`;
+  while (ctx.measureText(d.queueCode).width > W - PAD * 2 - 24 && size > 30) {
+    size -= 2;
+    ctx.font = `bold ${size}px ${FONT}`;
+  }
+  const blockH = Math.round(size * 1.35);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(PAD, y, W - PAD * 2, blockH);
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.font = `bold ${size}px ${FONT}`;
+  ctx.fillText(d.queueCode, W / 2, y + Math.round(size * 0.18));
+  ctx.fillStyle = "#000";
+  y += blockH + 16;
+
+  centered("PROCEED TO", 22, "normal");
+  centered(d.destination, 30);
+  centered(d.clinic, 24, "normal");
+  dashed();
+
+  // Patient
+  leftText("PATIENT", 26);
+  y += 4;
+  row("STATUS:", "New Patient");
+  row("NAME:", d.patientName);
+  row("AGE:", d.age);
+  row("SEX:", d.gender);
+  row("PWD:", d.pwdStatus);
+  row("ADDRESS:", d.address);
+  dashed();
+
+  // Vitals
+  leftText("VITAL SIGNS", 26);
+  y += 4;
+  row("BP:", `${d.bpSys}/${d.bpDia} mmHg`);
+  row("HEART RATE:", `${d.hr} bpm`);
+  row("SpO2:", `${d.spo2} %`);
+  row("TEMP:", `${d.temperature} C`);
+  dashed();
+
+  // Complaint
+  leftText("CHIEF COMPLAINT", 26);
+  y += 4;
+  leftText(d.complaints || "N/A", 26);
+  dashed();
+
+  // Footer
+  centered("Present this slip to the triage", 24);
+  centered("nurse or clinic window.", 24);
+  y += 6;
+  centered("Keep this ticket with you.", 22, "normal");
+  centered("Hintayin po ang tawag sa inyong numero.", 22, "normal");
+
+  // Crop to content (+ bottom margin for the cutter)
+  const out = document.createElement("canvas");
+  out.width = W;
+  out.height = Math.ceil(y + PAD + 48);
+  const octx = out.getContext("2d")!;
+  octx.fillStyle = "#fff";
+  octx.fillRect(0, 0, out.width, out.height);
+  octx.drawImage(tall, 0, 0);
+
+  return out.toDataURL("image/jpeg", 1.0);
+}
+
+/** Browser print of the receipt image (thermal printer installed as a system
+ *  printer; run Chrome with --kiosk-printing to skip the print dialog). */
+function printImage(dataUrl: string): Promise<void> {
+  return new Promise(resolve => {
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    document.body.appendChild(iframe);
+
+    const win = iframe.contentWindow!;
+    const doc = win.document;
+    doc.open();
+    doc.write(
+      `<!doctype html><html><head><style>
+        @page { size: ${PAPER_MM} auto; margin: 0; }
+        html, body { margin: 0; padding: 0; background: #fff; }
+        img { width: ${PAPER_MM}; display: block; }
+      </style></head><body><img id="receipt" src="${dataUrl}"></body></html>`
+    );
+    doc.close();
+
+    const img = doc.getElementById("receipt") as HTMLImageElement;
+    const go = () => {
+      win.focus();
+      win.print();
+      setTimeout(() => {
+        iframe.remove();
+        resolve();
+      }, 1000);
+    };
+    if (img.complete) go();
+    else img.onload = go;
+  });
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
+
+export default function SummaryScreen({
+  patientName,
+  age,
+  gender,
+  patientAddress,
+  pwdStatus,
+  bpSys,
+  bpDia,
+  hr,
+  spo2,
+  temperature,
+  complaints,
+  clinic,
+  destination,
+  queueCode,
+  date,
+  time,
+  ticketMetadata,
+  onFinish,
+  onPrintTicket,
+}: SummaryScreenProps) {
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [phase, setPhase] = useState<Phase>("preview");
+  const mounted = useRef(true);
+
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
+
+  // Build the receipt image from the patient data
+  const data: ReceiptData = {
+    serviceTitle: ticketMetadata?.serviceTitle ?? "MEDICAL CONSULTATION",
+    patientName,
+    age,
+    gender,
+    address: patientAddress,
+    pwdStatus,
+    bpSys,
+    bpDia,
+    hr,
+    spo2,
+    temperature,
+    complaints,
+    clinic,
+    destination,
+    queueCode,
+    date,
+    time,
+  };
+
+  useEffect(() => {
+    setReceiptUrl(buildReceiptImage(data));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [JSON.stringify(data)]);
+
+  const handlePrint = async () => {
+    if (!receiptUrl || phase === "printing" || phase === "done") return;
+    setPhase("printing");
+
+    try {
+      const minWait = new Promise<void>(r => setTimeout(r, PRINTING_SECONDS * 1000));
+      const job = onPrintTicket
+        ? Promise.resolve(onPrintTicket({ queueCode, imageDataUrl: receiptUrl }))
+        : printImage(receiptUrl);
+      await Promise.all([job, minWait]);
+
+      if (!mounted.current) return;
+      setPhase("done");
+      setTimeout(() => {
+        if (mounted.current) onFinish();
+      }, DONE_SECONDS * 1000);
+    } catch {
+      if (mounted.current) setPhase("error");
+    }
+  };
+
+  const shrunk = phase !== "preview" && phase !== "error";
 
   return (
-    <div className="">
-      <nav className="w-full pl-[2rem] pt-[1rem] pb-[1rem] pr-[2rem] text-cyan-950 bg-yellow-50">
-        <div className="container mx-auto flex items-center justify-between">
-          <div className="flex flex-col">
-            <h1 className="text-2xl font-bold">BICA</h1>
-            <p className="w-full">Better Informed Care Access</p>
-          </div>
+    <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
+      <style>{`
+        @keyframes bica-print {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(300%); }
+        }
+        .bica-print-bar { animation: bica-print 1.4s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) {
+          .bica-print-bar { animation: none; }
+        }
+      `}</style>
 
-          <div className="pr-[2rem]">
-            <ul className="md:flex space-x-8 hidden text-xl font-semibold w-full">
-              <li><a href="#" className="cursor-pointer hover:underline">Triage Form |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Vital Signs |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline">Chief Complaints |</a></li>
-              <li><a href="#" className="cursor-pointer hover:underline text-orange-600 underline">Summary |</a></li>
-            </ul>
-            <div className="md:hidden">
-              <a className="text-4xl font-semibold" href="#">&#8801;</a>
-            </div>
-          </div>
-        </div>
+      {/* HEADER */}
+      <nav className="w-full px-8 py-4 bg-yellow-50 shadow-md">
+        <h1 className="text-3xl font-extrabold tracking-wide text-cyan-950">BICA</h1>
+        <p className="text-xs font-semibold uppercase tracking-wider text-cyan-800">Better Informed Care Access</p>
       </nav>
 
-      <div className="min-h-screen flex flex-col gap-[1.5rem] items-center justify-center bg-cyan-950 py-[3rem]">
-        <div className="flex flex-col text-center justify-center gap-[0.75rem]">
-          <div className="flex items-center justify-center">
-            <span className={`inline-flex items-center rounded-full px-4 py-1 text-xs font-black uppercase tracking-[0.25em] ${activeTicket.badgeColor}`}>
-              {queueCode.split('-')[0] || "FM"}
-            </span>
-          </div>
-          <h1 className="text-[3rem] font-bold text-white">Patient Summary</h1>
-          <p className="text-[1.7rem] font-serif text-white">Please review your information before printing.</p>
-          <div className="text-sm text-cyan-300">
-            {activeTicket.serviceTitle}
-          </div>
+      {/* MAIN */}
+      <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 py-8">
+        <h2 className="text-4xl font-extrabold text-white text-center">
+          {phase === "preview" || phase === "error" ? "Your Triage Ticket" : "Please wait"}
+        </h2>
+
+        {/* Receipt preview: large, shrinks while printing */}
+        <div
+          className="flex items-center justify-center overflow-hidden rounded-lg bg-white shadow-2xl transition-all duration-700 ease-in-out"
+          style={{ height: shrunk ? "22vh" : "58vh" }}
+        >
+          {receiptUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={receiptUrl}
+              alt={`Triage ticket ${queueCode}`}
+              className="h-full w-auto object-contain"
+            />
+          ) : (
+            <div className="px-16 text-lg font-semibold text-gray-500">Preparing ticket…</div>
+          )}
         </div>
 
-        <div className="flex flex-row gap-[2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem] items-start">
-          <div className="flex flex-col items-center gap-[0.5rem] flex-shrink-0">
-            <p className="text-[0.78rem] font-semibold text-white uppercase tracking-wider self-start mb-[0.2rem]">
-              Receipt Preview (58mm)
-            </p>
-            <div className="w-[219px] bg-white font-mono text-black flex flex-col shadow-2xl">
-              <div className="w-full h-[6px] bg-[repeating-linear-gradient(90deg,#fff_0px,#fff_6px,#e5e7eb_6px,#e5e7eb_8px)]" />
-              <div className="px-[8px] py-[6px] flex flex-col gap-[2px]">
-                <div className="flex flex-col items-center text-center mb-[4px]">
-                  <p className="text-[9px] font-bold leading-tight">NORTHERN MINDANAO</p>
-                  <p className="text-[9px] font-bold leading-tight">MEDICAL CENTER</p>
-                  <p className="text-[7.5px] leading-tight text-gray-600">{isSpecialService ? "Service Queue Slip" : "Triage Assessment Slip"}</p>
-                  <p className="text-[7px] leading-tight text-gray-500">BICA — Better Informed Care Access</p>
-                </div>
-                <div className="border-t border-dashed border-gray-400 my-[3px]" />
-                <div className="flex flex-row justify-between">
-                  <p className="text-[7.5px]">Date: {date}</p>
-                  <p className="text-[7.5px]">Time: {time}</p>
-                </div>
-                <div className="border-t border-dashed border-gray-400 my-[3px]" />
-                <p className="text-[7.5px] font-bold uppercase">Patient Information</p>
-                <div className="flex flex-col gap-[1px] pl-[4px]">
-                  <div className="flex flex-row justify-between">
-                    <p className="text-[7px] text-gray-600">Name:</p>
-                    <p className="text-[7px] font-semibold text-right w-[130px] leading-tight">{patientName}</p>
-                  </div>
-                  <div className="flex flex-row justify-between">
-                    <p className="text-[7px] text-gray-600">Age:</p>
-                    <p className="text-[7px] font-semibold">{age} yrs old</p>
-                  </div>
-                  <div className="flex flex-row justify-between">
-                    <p className="text-[7px] text-gray-600">Sex:</p>
-                    <p className="text-[7px] font-semibold">{gender}</p>
-                  </div>
-                  {patientAddress && (
-                    <div className="flex flex-row justify-between">
-                      <p className="text-[7px] text-gray-600">Address:</p>
-                      <p className="text-[7px] font-semibold text-right w-[130px] leading-tight">{patientAddress}</p>
-                    </div>
-                  )}
-                  {pwdStatus && (
-                    <div className="flex flex-row justify-between">
-                      <p className="text-[7px] text-gray-600">PWD:</p>
-                      <p className="text-[7px] font-semibold">{pwdStatus}</p>
-                    </div>
-                  )}
-                </div>
-                <div className="border-t border-dashed border-gray-400 my-[3px]" />
-                <div className="flex flex-row justify-between">
-                  <p className="text-[7px] text-gray-600">Status:</p>
-                  <p className="text-[7px] font-semibold">
-                    {currentStatus === "new"
-                      ? "New Patient"
-                      : currentStatus === "returning"
-                      ? "Returning Patient"
-                      : "Referred Patient"}
-                  </p>
-                </div>
-                {currentStatus === "referred" && (
-                  <>
-                    <div className="border-t border-dashed border-gray-400 my-[3px]" />
-                    <div className="flex flex-col gap-[1px] pl-[4px]">
-                      <div className="flex flex-row justify-between">
-                        <p className="text-[7px] text-gray-600">Referred From:</p>
-                        <p className="text-[7px] font-semibold text-right w-[110px] leading-tight">{referralFrom}</p>
-                      </div>
-                      <div className="flex flex-row justify-between">
-                        <p className="text-[7px] text-gray-600">Referring Dr.:</p>
-                        <p className="text-[7px] font-semibold">{referralDoctor}</p>
-                      </div>
-                      <div className="flex flex-row justify-between">
-                        <p className="text-[7px] text-gray-600">Referral Date:</p>
-                        <p className="text-[7px] font-semibold">{referralDate}</p>
-                      </div>
-                    </div>
-                  </>
-                )}
-                <div className="border-t border-dashed border-gray-400 my-[3px]" />
-                {isSpecialService ? (
-                  <>
-                    <p className="text-[7.5px] font-bold uppercase">Service Type</p>
-                    <p className="text-[7px] pl-[4px] leading-tight">{activeTicket.serviceTitle}</p>
-                    <div className="border-t border-dashed border-gray-400 my-[3px]" />
-                    <p className="text-[7.5px] font-bold uppercase">Triage Bypass</p>
-                    <p className="text-[7px] pl-[4px] leading-tight">Vital signs and chief complaint are not required for this service.</p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-[7.5px] font-bold uppercase">Vital Signs</p>
-                    <div className="flex flex-col gap-[1px] pl-[4px]">
-                      <div className="flex flex-row justify-between">
-                        <p className="text-[7px] text-gray-600">BP:</p>
-                        <p className="text-[7px] font-semibold">{bpSys}/{bpDia} mmHg</p>
-                      </div>
-                      <div className="flex flex-row justify-between">
-                        <p className="text-[7px] text-gray-600">HR:</p>
-                        <p className="text-[7px] font-semibold">{hr} bpm</p>
-                      </div>
-                      <div className="flex flex-row justify-between">
-                        <p className="text-[7px] text-gray-600">SpO2:</p>
-                        <p className="text-[7px] font-semibold">{spo2}%</p>
-                      </div>
-                      <div className="flex flex-row justify-between">
-                        <p className="text-[7px] text-gray-600">Temp:</p>
-                        <p className="text-[7px] font-semibold">{temperature} °C</p>
-                      </div>
-                    </div>
-                    <div className="border-t border-dashed border-gray-400 my-[3px]" />
-                    <p className="text-[7.5px] font-bold uppercase">Chief Complaint</p>
-                    <p className="text-[7px] pl-[4px] italic leading-tight">{complaints}</p>
-                  </>
-                )}
-                <div className="border-t border-dashed border-gray-400 my-[3px]" />
-                <p className="text-[7.5px] font-bold uppercase">Assigned Clinic</p>
-                <p className="text-[8px] pl-[4px] font-bold">{isSpecialService ? activeTicket.serviceTitle : clinic}</p>
-                <p className="text-[7px] text-gray-600 mt-[1px] uppercase tracking-wider">Destination</p>
-                <p className="text-[8px] pl-[4px] font-semibold">{destination}</p>
-                <div className="border-t border-gray-400 my-[4px]" />
-                <div className="flex flex-col items-center py-[4px]">
-                  <p className="text-[7.5px] text-gray-600 uppercase tracking-wider">Queue Number</p>
-                  <p className="text-[28px] font-bold leading-tight tracking-widest">{queueCode}</p>
-                  <p className="text-[7px] text-gray-500 text-center leading-tight mt-[2px]">
-                    {isSpecialService ? `Proceed to ${destination} and present this slip.` : `Please proceed to the ${clinic} window and present this slip.`}
-                  </p>
-                </div>
-                <div className="border-t border-dashed border-gray-400 my-[3px]" />
-                <div className="flex flex-col items-center text-center mt-[2px] mb-[4px]">
-                  <p className="text-[6.5px] text-gray-500 leading-tight">NMMC · DOH Region X</p>
-                  <p className="text-[6.5px] text-gray-400 leading-tight">This slip is valid for today only.</p>
-                </div>
-              </div>
-              <div className="w-full h-[6px] bg-[repeating-linear-gradient(90deg,#fff_0px,#fff_6px,#e5e7eb_6px,#e5e7eb_8px)]" />
+        {/* Below the receipt: print button, then status */}
+        {phase === "preview" && (
+          <button
+            type="button"
+            onClick={handlePrint}
+            disabled={!receiptUrl}
+            className="w-full max-w-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-white text-3xl font-black py-6 px-10 rounded-2xl shadow-[0_10px_30px_rgba(5,150,105,0.4)] transition-all active:scale-95 border-2 border-emerald-300 flex items-center justify-center gap-4 cursor-pointer tracking-wider"
+          >
+            <svg className="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            <span>PRINT TICKET</span>
+          </button>
+        )}
+
+        {phase === "printing" && (
+          <div className="w-full max-w-xl text-center">
+            <p className="text-3xl font-bold text-cyan-100">Printing your ticket…</p>
+            <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-cyan-900">
+              <div className="bica-print-bar h-full w-1/3 rounded-full bg-emerald-400" />
             </div>
           </div>
+        )}
 
-          <div className="flex flex-col gap-[1rem] flex-1">
-            {isSpecialService ? (
-              <div className="flex flex-col gap-[1rem] flex-1">
-                <div className="flex flex-col gap-[0.4rem]">
-                  <p className="text-[0.78rem] font-semibold text-white uppercase tracking-wider">Service Queue</p>
-                  <div className={`rounded-lg px-[1rem] py-[0.75rem] ${activeTicket.badgeColor}`}>
-                    <p className="text-[0.95rem] font-semibold uppercase tracking-wider">{queueCode.split('-')[0]}</p>
-                    <p className="text-[1.1rem] font-black mt-[0.15rem]">{activeTicket.serviceTitle}</p>
-                  </div>
-                </div>
+        {phase === "done" && (
+          <p className="text-3xl font-bold text-emerald-300 text-center">
+            Ticket printed ✓ Please take your ticket.
+          </p>
+        )}
 
-                <div className="flex flex-col gap-[0.4rem]">
-                  <p className="text-[0.78rem] font-semibold text-white uppercase tracking-wider">Queue Number</p>
-                  <div className="flex flex-row bg-cyan-950 rounded-lg overflow-hidden">
-                    <div className="flex flex-col flex-1 px-[1.2rem] py-[1rem] border-r border-cyan-800">
-                      <p className="text-[0.72rem] font-semibold text-cyan-300 uppercase tracking-wider">Queue Code</p>
-                      <p className="text-[2.5rem] font-bold text-white leading-tight">{queueCode}</p>
-                    </div>
-                    <div className="flex flex-col flex-1 px-[1.2rem] py-[1rem] justify-center">
-                      <p className="text-[0.72rem] font-semibold text-cyan-300 uppercase tracking-wider">Destination</p>
-                      <p className="text-[1.1rem] font-bold text-white">{destination}</p>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex flex-col gap-[0.4rem]">
-                  <p className="text-[0.78rem] font-semibold text-white uppercase tracking-wider">Service Details</p>
-                  <div className="bg-cyan-950 rounded-lg px-[1rem] py-[0.75rem] text-white">
-                    <p className="text-[0.9rem] font-semibold">{activeTicket.serviceTitle}</p>
-                    <p className="text-[0.82rem] text-cyan-300 mt-[0.35rem]">
-                      This patient was routed directly to this desk without a routine vitals or chief complaint triage step.
-                    </p>
-                  </div>
-                </div>
-              </div>
-            ) : (
-              <>
-                {currentStatus === "new" && (
-                  <SummaryNewPatient
-                    patientName={patientName}
-                    age={age}
-                    gender={gender}
-                    bpSys={bpSys}
-                    bpDia={bpDia}
-                    hr={hr}
-                    spo2={spo2}
-                    temperature={temperature}
-                    complaints={complaints}
-                    clinic={clinic}
-                    destination={destination}
-                    queueCode={queueCode}
-                  />
-                )}
-                {currentStatus === "returning" && (
-                  <SummaryReturningPatient
-                    patientName={patientName}
-                    age={age}
-                    gender={gender}
-                    bpSys={bpSys}
-                    bpDia={bpDia}
-                    hr={hr}
-                    spo2={spo2}
-                    temperature={temperature}
-                    complaints={complaints}
-                    clinic={clinic}
-                    destination={destination}
-                    queueCode={queueCode}
-                  />
-                )}
-                {currentStatus === "referred" && (
-                  <SummaryReferredPatient
-                    patientName={patientName}
-                    age={age}
-                    gender={gender}
-                    bpSys={bpSys}
-                    bpDia={bpDia}
-                    hr={hr}
-                    spo2={spo2}
-                    temperature={temperature}
-                    complaints={complaints}
-                    clinic={clinic}
-                    destination={destination}
-                    queueCode={queueCode}
-                    referralFrom={referralFrom}
-                    referralDoctor={referralDoctor}
-                    referralDate={referralDate}
-                    referralPurpose={referralPurpose}
-                    referralFormNo={referralFormNo}
-                    referralDiagnosis={referralDiagnosis}
-                  />
-                )}
-              </>
-            )}
+        {phase === "error" && (
+          <div className="w-full max-w-xl text-center">
+            <p className="text-2xl font-bold text-yellow-300">Could not print. Please try again or ask staff for help.</p>
+            <button
+              type="button"
+              onClick={handlePrint}
+              className="mt-4 rounded-xl border-2 border-emerald-300 bg-emerald-600 px-8 py-3 text-xl font-bold text-white hover:bg-emerald-500 cursor-pointer"
+            >
+              Try again
+            </button>
           </div>
-        </div>
-
-        <div className="w-[70rem] mt-4 flex justify-end gap-3">
-          <button
-            type="button"
-            onClick={() => window.print()}
-            className="bg-white text-cyan-950 font-semibold px-5 py-2 rounded-lg"
-          >
-            Print
-          </button>
-
-          <button
-            type="button"
-            onClick={() => onFinish?.()}
-            className="bg-emerald-400 text-cyan-950 font-semibold px-5 py-2 rounded-lg"
-          >
-            Finish
-          </button>
-        </div>
-
+        )}
       </div>
+
+      {/* FOOTER */}
+      <footer className="w-full py-4 px-8 text-center text-cyan-300/60 text-sm border-t border-cyan-900">
+        BICA Outpatient Self-Service Kiosk
+      </footer>
     </div>
   );
 }

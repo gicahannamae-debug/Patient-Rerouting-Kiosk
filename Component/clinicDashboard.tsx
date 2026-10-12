@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Category = 'URGENT' | 'PRIORITY' | 'REGULAR';
-type ClinicCode = 'SUR' | 'PED' | 'OBG' | 'ENT' | 'IM' | 'ER';
+type ClinicCode = 'SUR' | 'PED' | 'OBG' | 'IM' | 'ER';
 
 interface Vitals {
   bp: string;     // mmHg, e.g. "120/80"
@@ -52,7 +52,6 @@ const CLINICS: Clinic[] = [
   { code: 'SUR', name: 'Surgery',           staffId: 'Surgery',    staffCode: '111', color: 'cyan'   },
   { code: 'PED', name: 'Pediatrics',        staffId: 'Pediatrics', staffCode: '222', color: 'green'  },
   { code: 'OBG', name: 'OB-GYN',            staffId: 'Obgyne',     staffCode: '333', color: 'pink'   },
-  { code: 'ENT', name: 'ENT',               staffId: 'ENT',        staffCode: '444', color: 'purple' },
   { code: 'IM',  name: 'Internal Medicine', staffId: 'IM',         staffCode: '555', color: 'blue'   },
   { code: 'ER',  name: 'Emergency Dept.',   staffId: 'ER',         staffCode: '666', color: 'red', isER: true },
 ];

@@ -1,5 +1,5 @@
 'use client';
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -12,204 +12,92 @@ interface Experience {
 
 interface RedFlagCategory {
   id: string;
-  name: string;      // patient-friendly category name (shown to the patient)
-  clinical: string;  // clinical category (kept for your data, not shown)
+  name: string;
+  clinical: string;
   experiences: Experience[];
 }
 
-interface Tier {
-  level: 1 | 2 | 3;
-  label: string;
-  title: string;
-  tone: "red" | "amber" | "blue";
-  categories: RedFlagCategory[];
-}
-
-export interface ScreeningResult {
-  tier: 1 | 2 | 3;
-  tierTitle: string;
+/** Payload sent to the ER dashboard the moment an emergency is detected */
+export interface EmergencyAlert {
+  ticketNumber: string;
+  symptom: string;
   category: string;
   clinicalCategory: string;
-  experience: string;
   clinics: ClinicName[];
+  createdAt: string; // ISO string
+}
+
+/** Payload handed to your thermal printer handler */
+export interface EmergencyPrintPayload {
+  symptom: string;
+  ticketNumber: string;
+  /** JPEG data URL of the receipt (black & white, thermal width) */
+  imageDataUrl: string;
 }
 
 interface CcRedflagProps {
-  /** Fallback for log out if onLogout is not provided */
   onBack?: () => void;
-  /** Log out -> back to Operator Login */
   onLogout?: () => void;
-  /** Called when the patient finishes the safety check.
-   *  Priority 2 / 3 selection => result is passed. "None apply" => no argument. */
-  onProceed?: (result?: ScreeningResult) => void;
-  onPrintEmergencyTicket?: (emergencyData: { symptom: string; ticketNumber: string }) => void;
+  /** Called when the patient answers "NONE apply" (no emergency) */
+  onProceed?: () => void;
+  /** Called IMMEDIATELY when an emergency is selected (before printing) */
+  onEmergencyAlert?: (alert: EmergencyAlert) => void;
+  /** Send the receipt image to your thermal printer. If omitted, the image is
+   *  printed through the browser (hidden iframe, 80mm page). */
+  onPrintEmergencyTicket?: (payload: EmergencyPrintPayload) => void | Promise<void>;
+  /** Called when the kiosk resets back to Welcome */
+  onEmergencyDone?: () => void;
 }
 
-// ─── Safety check data ────────────────────────────────────────────────────────
+// ─── Safety check data (Emergency / ABCs only) ───────────────────────────────
 
 const OBG: ClinicName = "OB-GYN";
 const IM: ClinicName = "Internal Medicine";
 const SUR: ClinicName = "Surgery";
 const PED: ClinicName = "Pediatrics";
 
-const TIERS: Tier[] = [
+const EMERGENCY_TITLE = "Life-Threatening Emergencies (The ABCs)";
+
+const CATEGORIES: RedFlagCategory[] = [
   {
-    level: 1,
-    label: "Priority 1",
-    title: "Life-Threatening Emergencies (The ABCs)",
-    tone: "red",
-    categories: [
-      {
-        id: "airway",
-        name: "Choking & Mouth/Throat Blockages",
-        clinical: "A – Airway",
-        experiences: [
-          { clinics: [OBG, IM, SUR], text: "Cannot speak, cough, or breathe due to a blocked throat." },
-          { clinics: [OBG, IM, SUR], text: "Severe allergic reaction causing the tongue or throat to swell shut." },
-          { clinics: [PED], text: "Child swallowed an object (toy, coin) and is gasping or turning blue." },
-          { clinics: [PED], text: "Child is choking and cannot make any sound or cry." },
-        ],
-      },
-      {
-        id: "breathing",
-        name: "Severe Breathing Difficulty",
-        clinical: "B – Breathing",
-        experiences: [
-          { clinics: [IM, SUR], text: "Sudden, severe shortness of breath or gasping for air." },
-          { clinics: [IM, SUR], text: "Unable to speak a full sentence without stopping to breathe." },
-          { clinics: [OBG], text: "Sudden, sharp chest pain with extreme shortness of breath during pregnancy." },
-          { clinics: [PED], text: "Child is breathing dangerously fast." },
-          { clinics: [PED], text: "Child's ribs pull in tightly with each breath (sucking in under the chest)." },
-        ],
-      },
-      {
-        id: "circulation",
-        name: "Chest Pain & Severe Bleeding",
-        clinical: "C – Circulation",
-        experiences: [
-          { clinics: [IM], text: "Heavy, crushing chest pain or pressure spreading to the arm or jaw." },
-          { clinics: [IM], text: "Heart racing dangerously fast out of nowhere with dizziness." },
-          { clinics: [OBG], text: "Heavy vaginal bleeding during pregnancy (soaking a menstrual pad in 1 hour)." },
-          { clinics: [OBG], text: "Sudden, gushing loss of blood." },
-          { clinics: [PED], text: "Child is completely pale or blue around the lips." },
-          { clinics: [PED], text: "Heavy bleeding from a deep wound that won't stop with pressure." },
-          { clinics: [SUR], text: "Blood is spurting heavily from a deep cut or severe injury." },
-          { clinics: [SUR], text: "Bleeding that does not stop after 10 minutes of direct pressure." },
-        ],
-      },
+    id: "airway",
+    name: "Choking & Mouth/Throat Blockages",
+    clinical: "A – Airway",
+    experiences: [
+      { clinics: [OBG, IM, SUR], text: "Cannot speak, cough, or breathe due to a blocked throat." },
+      { clinics: [OBG, IM, SUR], text: "Severe allergic reaction causing the tongue or throat to swell shut." },
+      { clinics: [PED], text: "Child swallowed an object (toy, coin) and is gasping or turning blue." },
+      { clinics: [PED], text: "Child is choking and cannot make any sound or cry." },
     ],
   },
   {
-    level: 2,
-    label: "Priority 2",
-    title: "Urgent Body Systems & Brain Function",
-    tone: "amber",
-    categories: [
-      {
-        id: "mental",
-        name: "Confusion, Fainting, & Brain Changes",
-        clinical: "Altered Mental Status",
-        experiences: [
-          { clinics: [IM], text: "Sudden numbness/weakness on one side of the face or body." },
-          { clinics: [IM], text: "Slurred speech or sudden confusion." },
-          { clinics: [OBG], text: "Fainting or sudden blackouts while pregnant." },
-          { clinics: [OBG], text: "Sudden severe headache with blurry vision/spots in the eyes (Pre-eclampsia)." },
-          { clinics: [PED], text: "Child is unusually floppy, limp, or impossible to wake up." },
-          { clinics: [PED], text: "Baby is completely unresponsive to your voice or touch." },
-          { clinics: [SUR], text: "Confused, dizzy, or vomiting repeatedly after a hard blow to the head." },
-        ],
-      },
-      {
-        id: "neuro",
-        name: "Seizures & Sudden Critical Risks",
-        clinical: "Neurological / Critical Risks",
-        experiences: [
-          { clinics: [IM, SUR], text: "Active shaking, fitting, or full-body convulsions." },
-          { clinics: [IM, SUR], text: "Known ingestion of poison, chemicals, or drug overdose." },
-          { clinics: [OBG], text: "Sudden loss of baby movement or no kicks felt for several hours." },
-          { clinics: [OBG], text: "Water breaking or regular contractions early (before 37 weeks)." },
-          { clinics: [PED], text: "Baby under 3 months old with any fever over 38°C (100.4°F)." },
-          { clinics: [PED], text: "Child has a seizure or full-body shaking during a high fever." },
-        ],
-      },
+    id: "breathing",
+    name: "Severe Breathing Difficulty",
+    clinical: "B – Breathing",
+    experiences: [
+      { clinics: [IM, SUR], text: "Sudden, severe shortness of breath or gasping for air." },
+      { clinics: [IM, SUR], text: "Unable to speak a full sentence without stopping to breathe." },
+      { clinics: [OBG], text: "Sudden, sharp chest pain with extreme shortness of breath during pregnancy." },
+      { clinics: [PED], text: "Child is breathing dangerously fast." },
+      { clinics: [PED], text: "Child's ribs pull in tightly with each breath (sucking in under the chest)." },
     ],
   },
   {
-    level: 3,
-    label: "Priority 3",
-    title: "Injuries, Pain, & Other Symptoms",
-    tone: "blue",
-    categories: [
-      {
-        id: "trauma",
-        name: "Accidents, Injuries, & Burns",
-        clinical: "Trauma / Injury",
-        experiences: [
-          { clinics: [SUR], text: "Suspected broken bones (limb is bent abnormally or cannot bear weight)." },
-          { clinics: [SUR], text: "Deep cuts needing stitches or severe burns from fire/chemicals." },
-          { clinics: [SUR], text: "Pain or swelling at an old surgical site." },
-          { clinics: [PED], text: "Child fell from a height or injured a limb and refuses to use it." },
-          { clinics: [IM, OBG], text: "Minor cuts or scrapes that are not bleeding heavily." },
-        ],
-      },
-      {
-        id: "pain",
-        name: "Severe Body Pain",
-        clinical: "Somatic Pain",
-        experiences: [
-          { clinics: [SUR], text: "Sudden, agonizing pain starting around the belly button and moving to the lower right side (Appendicitis)." },
-          { clinics: [OBG], text: "Severe, sharp pain in the lower belly or pelvic area (pregnant or non-pregnant)." },
-          { clinics: [IM], text: "Sudden, unbearable headache (worse than any normal headache)." },
-          { clinics: [IM], text: "Severe, cramping abdominal pain with nausea." },
-          { clinics: [PED], text: "Child crying inconsolably for hours due to unexplained, severe body pain." },
-        ],
-      },
-      {
-        id: "infection",
-        name: "Severe Reactions & Infections",
-        clinical: "Systemic Infection",
-        experiences: [
-          { clinics: [IM], text: "High fever with extreme shivering, dizziness, and low energy." },
-          { clinics: [IM], text: "Sudden full-body rash with mild swelling." },
-          { clinics: [OBG], text: "Foul-smelling vaginal discharge with pelvic pain and a fever." },
-          { clinics: [PED], text: "Dehydration: No wet diapers for over 8 hours, or crying with no tears." },
-          { clinics: [PED], text: "Persistent vomiting—cannot keep any fluids down for several hours." },
-        ],
-      },
+    id: "circulation",
+    name: "Chest Pain & Severe Bleeding",
+    clinical: "C – Circulation",
+    experiences: [
+      { clinics: [IM], text: "Heavy, crushing chest pain or pressure spreading to the arm or jaw." },
+      { clinics: [IM], text: "Heart racing dangerously fast out of nowhere with dizziness." },
+      { clinics: [OBG], text: "Heavy vaginal bleeding during pregnancy (soaking a menstrual pad in 1 hour)." },
+      { clinics: [OBG], text: "Sudden, gushing loss of blood." },
+      { clinics: [PED], text: "Child is completely pale or blue around the lips." },
+      { clinics: [PED], text: "Heavy bleeding from a deep wound that won't stop with pressure." },
+      { clinics: [SUR], text: "Blood is spurting heavily from a deep cut or severe injury." },
+      { clinics: [SUR], text: "Bleeding that does not stop after 10 minutes of direct pressure." },
     ],
   },
 ];
-
-// Full class strings so Tailwind can detect them
-const TONE = {
-  red: {
-    panel: "bg-red-950/90 border-red-500/60",
-    divider: "border-red-500/30",
-    heading: "text-red-300",
-    icon: "text-red-400",
-    hint: "text-red-100 bg-red-900 border-red-600",
-    button: "bg-red-900/70 border-red-500/50 hover:bg-red-700",
-    buttonText: "text-red-50 group-hover:text-white",
-  },
-  amber: {
-    panel: "bg-amber-950/90 border-amber-500/60",
-    divider: "border-amber-500/30",
-    heading: "text-amber-300",
-    icon: "text-amber-400",
-    hint: "text-amber-100 bg-amber-900 border-amber-600",
-    button: "bg-amber-900/60 border-amber-500/50 hover:bg-amber-700",
-    buttonText: "text-amber-50 group-hover:text-white",
-  },
-  blue: {
-    panel: "bg-sky-950/90 border-sky-500/60",
-    divider: "border-sky-500/30",
-    heading: "text-sky-300",
-    icon: "text-sky-400",
-    hint: "text-sky-100 bg-sky-900 border-sky-600",
-    button: "bg-sky-900/60 border-sky-500/50 hover:bg-sky-700",
-    buttonText: "text-sky-50 group-hover:text-white",
-  },
-} as const;
 
 const STEPS = [
   "Welcome",
@@ -221,9 +109,11 @@ const STEPS = [
   "Ticket",
 ];
 const SAFETY_STEP_INDEX = 1;
-const SAFETY_PARTS = 6; // 3 priority tiers x (categories + experiences)
+const SAFETY_PARTS = 2;
 
-// Clinic codes used only inside the queue number, e.g. ER-OB-482
+/** Seconds on the ticket screen before returning to Welcome */
+const TICKET_SCREEN_SECONDS = 20;
+
 const CLINIC_CODE: Record<ClinicName, string> = {
   "OB-GYN": "OB",
   "Internal Medicine": "IM",
@@ -231,50 +121,243 @@ const CLINIC_CODE: Record<ClinicName, string> = {
   "Pediatrics": "PED",
 };
 
+type ScreenStep = "welcome" | "screening" | "emergency" | "erTicket";
+type PrintStatus = "idle" | "generating" | "printing" | "printed" | "error";
+
+// ─── Thermal receipt image ────────────────────────────────────────────────────
+// 80mm paper = 576 dots wide. For 58mm paper use RECEIPT_WIDTH = 384 and
+// PAPER_MM = "58mm".
+
+const RECEIPT_WIDTH = 576;
+const PAPER_MM = "80mm";
+
+function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
+  const words = text.split(" ");
+  const lines: string[] = [];
+  let line = "";
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines;
+}
+
+function buildReceiptImage(data: { symptom: string; ticketNumber: string }): string {
+  const W = RECEIPT_WIDTH;
+  const PAD = 24;
+  const FONT = '"Courier New", monospace';
+
+  const tall = document.createElement("canvas");
+  tall.width = W;
+  tall.height = 2400;
+  const ctx = tall.getContext("2d")!;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, W, tall.height);
+  ctx.fillStyle = "#000";
+  ctx.textBaseline = "top";
+
+  let y = PAD;
+
+  const centered = (str: string, size: number, weight = "bold") => {
+    ctx.textAlign = "center";
+    ctx.font = `${weight} ${size}px ${FONT}`;
+    for (const line of wrapText(ctx, str, W - PAD * 2)) {
+      ctx.fillText(line, W / 2, y);
+      y += size * 1.25;
+    }
+  };
+
+  const dashed = () => {
+    y += 8;
+    ctx.setLineDash([10, 8]);
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = "#000";
+    ctx.beginPath();
+    ctx.moveTo(PAD, y);
+    ctx.lineTo(W - PAD, y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    y += 16;
+  };
+
+    // Header
+  centered("Welcome to Bica", 48);
+  centered("Emergency Triage Slip", 24, "normal");
+  centered("OPD Kiosk", 24, "normal");
+  dashed();
+
+  // Date / time row
+  const now = new Date();
+  ctx.font = `normal 24px ${FONT}`;
+  ctx.textAlign = "left";
+  ctx.fillText(`DATE: ${now.toLocaleDateString()}`, PAD, y);
+  ctx.textAlign = "right";
+  ctx.fillText(
+    `TIME: ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+    W - PAD,
+    y
+  );
+  y += 34;
+  dashed();
+
+  // Emergency banner (white on black, since thermal paper has no red)
+  const bannerH = 64;
+  ctx.fillStyle = "#000";
+  ctx.fillRect(PAD, y, W - PAD * 2, bannerH);
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.font = `bold 38px ${FONT}`;
+  ctx.fillText("*** EMERGENCY ***", W / 2, y + 12);
+  ctx.fillStyle = "#000";
+  y += bannerH + 16;
+
+  // Complaint
+  ctx.textAlign = "left";
+  ctx.font = `normal 24px ${FONT}`;
+  ctx.fillText("CHIEF COMPLAINT:", PAD, y);
+  y += 32;
+  centered(data.symptom, 30);
+  dashed();
+
+  // Destination
+  centered("DESTINATION", 22, "normal");
+  centered("EMERGENCY ROOM (ER)", 36);
+  y += 8;
+  centered("PRIORITY QUEUE CODE", 22, "normal");
+
+  // Ticket number, shrunk to fit the paper width
+  let size = 84;
+  ctx.font = `bold ${size}px ${FONT}`;
+  while (ctx.measureText(data.ticketNumber).width > W - PAD * 2 && size > 30) {
+    size -= 2;
+    ctx.font = `bold ${size}px ${FONT}`;
+  }
+  centered(data.ticketNumber, size);
+  dashed();
+
+        {/* FOOTER */}
+      <footer className="w-full py-4 px-8 text-center text-cyan-300/60 text-sm border-t border-cyan-900">
+        BICA Outpatient Self-Service Kiosk
+      </footer>
+
+  // Crop to content (+ bottom margin so the cutter doesn't clip the text)
+  const out = document.createElement("canvas");
+  out.width = W;
+  out.height = Math.ceil(y + PAD + 48);
+  const octx = out.getContext("2d")!;
+  octx.fillStyle = "#fff";
+  octx.fillRect(0, 0, out.width, out.height);
+  octx.drawImage(tall, 0, 0);
+
+  return out.toDataURL("image/jpeg", 1.0);
+}
+
+/** Browser print of the receipt image (works with a thermal printer installed
+ *  as a system printer; run Chrome with --kiosk-printing to skip the dialog). */
+function printImage(dataUrl: string): Promise<void> {
+  return new Promise(resolve => {
+    const iframe = document.createElement("iframe");
+    iframe.style.cssText = "position:fixed;right:0;bottom:0;width:0;height:0;border:0;";
+    document.body.appendChild(iframe);
+
+    const win = iframe.contentWindow!;
+    const doc = win.document;
+    doc.open();
+    doc.write(
+      `<!doctype html><html><head><style>
+        @page { size: ${PAPER_MM} auto; margin: 0; }
+        html, body { margin: 0; padding: 0; background: #fff; }
+        img { width: ${PAPER_MM}; display: block; }
+      </style></head><body><img id="receipt" src="${dataUrl}"></body></html>`
+    );
+    doc.close();
+
+    const img = doc.getElementById("receipt") as HTMLImageElement;
+    const go = () => {
+      win.focus();
+      win.print();
+      setTimeout(() => {
+        iframe.remove();
+        resolve();
+      }, 1000);
+    };
+    if (img.complete) go();
+    else img.onload = go;
+  });
+}
+
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergencyTicket }: CcRedflagProps) {
-  const [screenStep, setScreenStep] = useState<"welcome" | "screening" | "emergency" | "erTicket">("welcome");
+export default function CcRedflag({
+  onBack,
+  onLogout,
+  onProceed,
+  onEmergencyAlert,
+  onPrintEmergencyTicket,
+  onEmergencyDone,
+}: CcRedflagProps) {
+  const [screenStep, setScreenStep] = useState<ScreenStep>("welcome");
   const [alertData, setAlertData] = useState({ symptom: "", ticketNumber: "" });
 
-  // Safety check position
-  const [tierIndex, setTierIndex] = useState(0);
   const [view, setView] = useState<"categories" | "experiences">("categories");
   const [categoryId, setCategoryId] = useState<string | null>(null);
-
   const [menuOpen, setMenuOpen] = useState(false);
 
-  const currentTier = TIERS[tierIndex];
-  const tone = TONE[currentTier.tone];
-  const isLastTier = tierIndex === TIERS.length - 1;
-  const selectedCategory = currentTier.categories.find(c => c.id === categoryId) ?? null;
+  const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
+  const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
+  const printedFor = useRef<string | null>(null);
+
+  const selectedCategory = CATEGORIES.find(c => c.id === categoryId) ?? null;
+
+  // ── Printing ────────────────────────────────────────────────────────────────
+
+  const doPrint = async (url: string, data: { symptom: string; ticketNumber: string }) => {
+    try {
+      setPrintStatus("printing");
+      if (onPrintEmergencyTicket) {
+        await onPrintEmergencyTicket({ ...data, imageDataUrl: url });
+      } else {
+        await printImage(url);
+      }
+      setPrintStatus("printed");
+    } catch {
+      setPrintStatus("error");
+    }
+  };
+
+  // Auto: build the receipt image, show the preview, then print once
+  useEffect(() => {
+    if (screenStep !== "erTicket") return;
+    if (!alertData.ticketNumber) return;
+    if (printedFor.current === alertData.ticketNumber) return;
+    printedFor.current = alertData.ticketNumber;
+
+    (async () => {
+      try {
+        setPrintStatus("generating");
+        const url = buildReceiptImage(alertData);
+        setReceiptUrl(url);
+        // let the preview paint before the print dialog/handler takes over
+        await new Promise(r => setTimeout(r, 900));
+        await doPrint(url, alertData);
+      } catch {
+        setPrintStatus("error");
+      }
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenStep, alertData]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
   const resetScreening = () => {
-    setTierIndex(0);
     setView("categories");
     setCategoryId(null);
-  };
-
-  const handleGoEmergency = (symptom: string, clinics: ClinicName[]) => {
-    const randomNum = Math.floor(100 + Math.random() * 900);
-    const clinicTag = clinics.map(c => CLINIC_CODE[c]).join("/");
-    const data = { symptom, ticketNumber: `ER-${clinicTag}-${randomNum}` };
-    setAlertData(data);
-    setScreenStep("emergency");
-
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("bica_emergency", JSON.stringify(data));
-    }
-  };
-
-  const handlePrint = () => {
-    if (onPrintEmergencyTicket) {
-      onPrintEmergencyTicket(alertData);
-    } else {
-      window.print();
-    }
   };
 
   const handleSelectCategory = (id: string) => {
@@ -285,42 +368,57 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
   const handleSelectExperience = (exp: Experience) => {
     if (!selectedCategory) return;
 
-    // Priority 1 -> immediate Emergency Red Alert
-    if (currentTier.level === 1) {
-      handleGoEmergency(exp.text, exp.clinics);
-      return;
+    const randomNum = Math.floor(100 + Math.random() * 900);
+    const clinicTag = exp.clinics.map(c => CLINIC_CODE[c]).join("/");
+    const ticketNumber = `ER-${clinicTag}-${randomNum}`;
+
+    setAlertData({ symptom: exp.text, ticketNumber });
+    setScreenStep("emergency");
+
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem("bica_emergency", JSON.stringify({ symptom: exp.text, ticketNumber }));
     }
 
-    // Priority 2 / 3 -> hand the result to the next step
-    onProceed?.({
-      tier: currentTier.level,
-      tierTitle: currentTier.title,
+    // Notify the ER dashboard right away (do NOT wait for printing)
+    onEmergencyAlert?.({
+      ticketNumber,
+      symptom: exp.text,
       category: selectedCategory.name,
       clinicalCategory: selectedCategory.clinical,
-      experience: exp.text,
       clinics: exp.clinics,
+      createdAt: new Date().toISOString(),
     });
   };
 
-  // "None of these apply" -> next priority tier (or proceed after the last one)
   const handleNone = () => {
-    if (isLastTier) {
-      onProceed?.();
-    } else {
-      setTierIndex(i => i + 1);
-      setView("categories");
-      setCategoryId(null);
-    }
+    onProceed?.();
   };
 
   const handlePrevious = () => {
-    if (view === "experiences") {
-      setView("categories");
-      setCategoryId(null);
-    } else if (tierIndex > 0) {
-      setTierIndex(i => i - 1);
-    }
+    setView("categories");
+    setCategoryId(null);
   };
+
+  const handleReset = () => {
+    if (typeof window !== "undefined") {
+      sessionStorage.removeItem("bica_emergency");
+    }
+    printedFor.current = null;
+    setReceiptUrl(null);
+    setPrintStatus("idle");
+    setAlertData({ symptom: "", ticketNumber: "" });
+    resetScreening();
+    setScreenStep("welcome");
+    onEmergencyDone?.();
+  };
+
+  // Auto-return to Welcome after the ticket screen has been up for N seconds
+  useEffect(() => {
+    if (screenStep !== "erTicket") return;
+    const timer = setTimeout(handleReset, TICKET_SCREEN_SECONDS * 1000);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [screenStep]);
 
   const handleLogout = () => {
     setMenuOpen(false);
@@ -332,8 +430,14 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
 
   // ── Progress indicator state ────────────────────────────────────────────────
 
-  const activeStep = screenStep === "welcome" ? 0 : screenStep === "erTicket" ? STEPS.length - 1 : SAFETY_STEP_INDEX;
-  const currentPart = tierIndex * 2 + (view === "experiences" ? 2 : 1); // 1..6
+  const activeStep =
+    screenStep === "welcome"
+      ? 0
+      : screenStep === "erTicket"
+      ? STEPS.length - 1
+      : SAFETY_STEP_INDEX;
+
+  const currentPart = view === "experiences" ? 2 : 1;
 
   const circleState = (n: number): "done" | "current" | "future" => {
     if (activeStep > SAFETY_STEP_INDEX) return "done";
@@ -349,11 +453,42 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
     future: "bg-transparent text-cyan-950 border-cyan-950/40 blur-[2px] opacity-50",
   };
 
-  const showPrevious = view === "experiences" || tierIndex > 0;
-  const previousLabel = view === "experiences" ? "← Choose another category" : "← Previous Priority";
+  const statusText: Record<PrintStatus, string> = {
+    idle: "",
+    generating: "Preparing your ticket…",
+    printing: "Printing your ticket…",
+    printed: "Ticket printed ✓ Please take it with you.",
+    error: "Could not print. Staff will assist you.",
+  };
 
   return (
     <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
+      <style>{`
+        @keyframes bica-flash {
+          0%, 100% { background-color: #450a0a; }
+          50%      { background-color: #dc2626; }
+        }
+        .bica-flash { animation: bica-flash 1.2s ease-in-out infinite; }
+
+        @keyframes bica-breathe {
+          0%, 100% { transform: scale(0.85); opacity: 0.6; }
+          50%      { transform: scale(1.1);  opacity: 1; }
+        }
+        .bica-breathe { animation: bica-breathe 6s ease-in-out infinite; }
+
+        @keyframes bica-print {
+          0%   { transform: translateX(-100%); }
+          100% { transform: translateX(300%); }
+        }
+        .bica-print-bar { animation: bica-print 1.4s ease-in-out infinite; }
+
+        @media (prefers-reduced-motion: reduce) {
+          .bica-flash { animation: none; background-color: #991b1b; }
+          .bica-breathe { animation: none; }
+          .bica-print-bar { animation: none; }
+        }
+      `}</style>
+
       {/* TOP KIOSK HEADER */}
       <nav className="relative z-30 w-full px-8 py-5 text-cyan-950 bg-yellow-50 shadow-md">
         <div className="w-full flex items-center justify-between gap-6">
@@ -368,7 +503,6 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
           </div>
 
           <div className="flex items-center gap-5 min-w-0">
-            {/* Step tracker */}
             <ol className="flex flex-wrap items-center justify-end gap-x-2 gap-y-2 text-sm">
               {STEPS.map((label, i) => {
                 const isActive = i === activeStep;
@@ -414,7 +548,6 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
               })}
             </ol>
 
-            {/* 3-bar menu: Operator log out */}
             <div className="relative shrink-0">
               <button
                 type="button"
@@ -470,7 +603,7 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
         </div>
       )}
 
-      {/* STEP 1: SAFETY CHECK (Priority 1 -> 2 -> 3) */}
+      {/* STEP 1: SAFETY CHECK (Emergency only) */}
       {screenStep === "screening" && (
         <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-6xl mx-auto w-full">
           <div className="text-center w-full mb-6">
@@ -482,32 +615,30 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
             </p>
           </div>
 
-          <div className={`w-full ${tone.panel} border-2 rounded-3xl p-8 shadow-2xl backdrop-blur-sm`}>
-            {/* Tier header */}
-            <div className={`flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b ${tone.divider} pb-4 mb-6`}>
-              <div className={`flex items-center gap-3 ${tone.heading} font-bold uppercase tracking-wider text-base`}>
-                <svg xmlns="http://www.w3.org/2000/svg" className={`w-7 h-7 flex-shrink-0 ${tone.icon}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <div className="w-full bg-red-950/90 border-red-500/60 border-2 rounded-3xl p-8 shadow-2xl backdrop-blur-sm">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-red-500/30 pb-4 mb-6">
+              <div className="flex items-center gap-3 text-red-300 font-bold uppercase tracking-wider text-base">
+                <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 flex-shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
                 </svg>
-                <span>{currentTier.label}: {currentTier.title}</span>
+                <span>Emergency Check: {EMERGENCY_TITLE}</span>
               </div>
-              <span className={`text-sm ${tone.hint} px-4 py-1.5 rounded-full border font-semibold self-start sm:self-auto`}>
+              <span className="text-sm text-red-100 bg-red-900 border-red-600 px-4 py-1.5 rounded-full border font-semibold self-start sm:self-auto">
                 {view === "categories" ? "Tap the one that applies" : "Tap what you are experiencing"}
               </span>
             </div>
 
             <div className="min-h-[360px] flex flex-col justify-between gap-6">
-              {/* CATEGORY LIST (patient-friendly names) */}
               {view === "categories" && (
-                <div className={`grid grid-cols-1 gap-5 ${currentTier.categories.length === 3 ? "md:grid-cols-3" : "md:grid-cols-2"}`}>
-                  {currentTier.categories.map(cat => (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                  {CATEGORIES.map(cat => (
                     <button
                       key={cat.id}
                       type="button"
                       onClick={() => handleSelectCategory(cat.id)}
-                      className={`${tone.button} border rounded-2xl p-6 text-left active:scale-[0.98] transition-all cursor-pointer group flex items-center min-h-[180px]`}
+                      className="bg-red-900/70 border-red-500/50 hover:bg-red-700 border rounded-2xl p-6 text-left active:scale-[0.98] transition-all cursor-pointer group flex items-center min-h-[180px]"
                     >
-                      <p className={`${tone.buttonText} text-3xl font-bold leading-snug`}>
+                      <p className="text-red-50 group-hover:text-white text-3xl font-bold leading-snug">
                         {cat.name}
                       </p>
                     </button>
@@ -515,7 +646,6 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
                 </div>
               )}
 
-              {/* EXPERIENCE LIST (what the patient experiences) */}
               {view === "experiences" && selectedCategory && (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                   {selectedCategory.experiences.map((exp, i) => (
@@ -523,9 +653,9 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
                       key={i}
                       type="button"
                       onClick={() => handleSelectExperience(exp)}
-                      className={`${tone.button} border rounded-2xl p-6 text-left active:scale-[0.98] transition-all cursor-pointer group flex items-center min-h-[160px]`}
+                      className="bg-red-900/70 border-red-500/50 hover:bg-red-700 border rounded-2xl p-6 text-left active:scale-[0.98] transition-all cursor-pointer group flex items-center min-h-[160px]"
                     >
-                      <p className={`${tone.buttonText} text-2xl font-semibold leading-relaxed`}>
+                      <p className="text-red-50 group-hover:text-white text-2xl font-semibold leading-relaxed">
                         {exp.text}
                       </p>
                     </button>
@@ -533,15 +663,14 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
                 </div>
               )}
 
-              {/* Navigation */}
-              <div className={`flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t ${tone.divider}`}>
-                {showPrevious ? (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-red-500/30">
+                {view === "experiences" ? (
                   <button
                     type="button"
                     onClick={handlePrevious}
                     className="w-full sm:w-auto px-6 py-4 bg-transparent border border-white/30 text-white text-lg font-semibold rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
                   >
-                    {previousLabel}
+                    ← Choose another category
                   </button>
                 ) : (
                   <span />
@@ -553,9 +682,7 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
                     onClick={handleNone}
                     className="w-full sm:w-auto px-8 py-4 bg-cyan-900 border-2 border-cyan-400 text-white text-xl font-bold rounded-xl hover:bg-cyan-800 transition-colors shadow-lg cursor-pointer"
                   >
-                    {isLastTier
-                      ? "NONE apply — Proceed to Registration →"
-                      : `NONE of these apply — Go to Priority ${currentTier.level + 1} →`}
+                    NONE apply — Proceed to Registration →
                   </button>
                 )}
               </div>
@@ -564,30 +691,32 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
         </div>
       )}
 
-      {/* STEP 2: EMERGENCY REDIRECTION NOTICE */}
+      {/* STEP 2: EMERGENCY ALERT (silent, flashing red) */}
       {screenStep === "emergency" && (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-12 max-w-4xl mx-auto text-center my-auto w-full">
-          <div className="w-full bg-red-900 border-4 border-red-500 text-white rounded-3xl p-10 text-center shadow-2xl">
-            <h3 className="text-4xl sm:text-6xl font-black mb-4 tracking-tight text-red-100">
-              IMMEDIATE ER REDIRECTION
+        <div
+          role="alert"
+          className="bica-flash flex-1 flex flex-col items-center justify-center px-6 py-12 text-center w-full"
+        >
+          <div className="w-full max-w-4xl text-white">
+            <h3 className="text-5xl sm:text-7xl font-black mb-4 tracking-tight drop-shadow-lg">
+              EMERGENCY
             </h3>
 
             <p className="text-2xl sm:text-3xl mb-8">
               Emergency Symptom Detected:{" "}
-              <span className="font-bold underline text-white decoration-red-400">
+              <span className="font-bold underline decoration-white">
                 {alertData.symptom}
               </span>
             </p>
 
-            {/* QUEUE NUMBER: ER - clinic - patient number */}
-            <div className="mx-auto mb-8 w-fit rounded-2xl border-2 border-red-300 bg-red-950 px-10 py-4">
+            <div className="mx-auto mb-8 w-fit rounded-2xl border-2 border-white bg-red-950 px-10 py-4 shadow-2xl">
               <span className="block text-xs font-bold uppercase tracking-widest text-red-300">Queue Number</span>
               <span className="block text-5xl sm:text-6xl font-black tracking-wider text-white">{alertData.ticketNumber}</span>
             </div>
 
-            <div className="bg-slate-950/90 p-10 rounded-2xl border border-red-500/50 max-w-2xl mx-auto mb-8 shadow-inner flex flex-col items-center gap-8">
+            <div className="bg-slate-950/90 p-10 rounded-2xl border border-red-500/50 max-w-2xl mx-auto shadow-inner flex flex-col items-center gap-8">
               <p className="text-2xl sm:text-3xl font-bold leading-relaxed text-red-100">
-                Please step out of line and proceed immediately to the Emergency Room (ER) triage desk!
+                Please stay where you are. Staff has been alerted.
               </p>
 
               <button
@@ -597,103 +726,79 @@ export default function CcRedflag({ onBack, onLogout, onProceed, onPrintEmergenc
                 <span>Continue to Print Ticket →</span>
               </button>
             </div>
-
-            <button
-              onClick={() => { resetScreening(); setScreenStep("screening"); }}
-              className="text-base text-red-200 hover:text-white underline opacity-80 cursor-pointer"
-            >
-              Cancel / Restart Safety Check
-            </button>
           </div>
         </div>
       )}
 
-      {/* STEP 3: EMERGENCY TICKET PREVIEW & PRINT */}
+      {/* STEP 3: TOP HALF = stay calm, BOTTOM HALF = receipt preview + printing */}
       {screenStep === "erTicket" && (
-        <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-6xl mx-auto w-full">
-          <div className="text-center w-full mb-6">
-            <h2 className="text-4xl font-extrabold text-white">Emergency Patient Summary</h2>
-            <p className="text-xl text-cyan-200 mt-1">
-              Please review your emergency slip before printing.
-            </p>
-          </div>
-
-          <div className="w-full bg-cyan-900/40 border border-cyan-500/30 rounded-3xl p-8 shadow-2xl backdrop-blur-sm flex flex-col md:flex-row gap-8 items-center justify-center">
-            {/* THERMAL RECEIPT SLIP PREVIEW */}
-            <div className="bg-white text-black p-6 rounded-lg shadow-2xl w-full max-w-[320px] font-mono text-xs border border-gray-300 flex flex-col gap-3">
-              <div className="text-center border-b border-black pb-2">
-                <h3 className="font-extrabold text-sm uppercase">Northern Mindanao Medical Center</h3>
-                <p className="text-[10px]">Triage Assessment Slip</p>
-                <p className="text-[10px]">BICA - OPD Kiosk</p>
-              </div>
-
-              <div className="border-b border-dashed border-black pb-2 text-[11px] flex justify-between">
-                <span>DATE: {new Date().toLocaleDateString()}</span>
-                <span>TIME: {new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>
-              </div>
-
-              <div className="border-b border-dashed border-black pb-2">
-                <span className="font-bold text-red-600 block text-xs">STATUS: EMERGENCY</span>
-                <span>CHIEF COMPLAINT:</span>
-                <p className="font-bold text-sm text-red-700 mt-0.5">{alertData.symptom}</p>
-              </div>
-
-              <div className="text-center py-2 border-b border-black">
-                <span className="text-[10px] uppercase font-bold text-gray-600 block">DESTINATION</span>
-                <span className="text-base font-black">EMERGENCY ROOM (ER)</span>
-                <span className="text-[10px] block text-gray-500 mt-1">PRIORITY QUEUE CODE</span>
-                <span className="text-3xl font-black text-red-600 tracking-wider block mt-1">{alertData.ticketNumber}</span>
-              </div>
-
-              <div className="text-center text-[10px] pt-1">
-                <p className="font-bold">Please proceed directly to the Emergency Room triage window and present this slip.</p>
+        <div className="flex-1 flex flex-col w-full">
+          {/* TOP HALF: calm notification */}
+          <div className="flex-1 basis-0 min-h-0 flex flex-col items-center justify-center bg-gradient-to-b from-cyan-900 via-teal-900 to-teal-800 px-8 py-6 text-center">
+            <div className="relative mb-6 flex items-center justify-center">
+              <div className="bica-breathe absolute h-44 w-44 rounded-full bg-teal-300/20" />
+              <div className="bica-breathe absolute h-32 w-32 rounded-full bg-teal-200/30" style={{ animationDelay: "0.4s" }} />
+              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-teal-100 text-3xl text-teal-900 shadow-xl">
+                ♥
               </div>
             </div>
 
-            {/* DETAILS + PRINT */}
-            <div className="flex-1 w-full max-w-xl flex flex-col justify-between gap-6">
-              <div className="bg-red-950/80 border border-red-500/50 rounded-2xl p-6 text-white space-y-4">
-                <div>
-                  <span className="text-xs uppercase tracking-wider text-red-300 font-bold">Patient Status</span>
-                  <p className="text-2xl font-bold text-red-400">Emergency Redirection</p>
-                </div>
+            <h2 className="mb-3 text-4xl font-extrabold text-white sm:text-6xl">
+              Please stay calm and relax.
+            </h2>
+            <p className="max-w-4xl text-2xl font-semibold leading-relaxed text-teal-100 sm:text-4xl">
+              Our staff is coming to help you. Please wait here.
+            </p>
+            <p className="mt-3 max-w-4xl text-xl text-teal-200/90 sm:text-2xl">
+              Huminahon po kayo. Paparating na ang aming staff para tulungan kayo.
+            </p>
+          </div>
 
-                <div>
-                  <span className="text-xs uppercase tracking-wider text-red-300 font-bold">Detected Symptom</span>
-                  <p className="text-xl font-semibold text-white">{alertData.symptom}</p>
+          {/* BOTTOM HALF: small receipt preview + printing status */}
+          <div className="flex-1 basis-0 min-h-0 flex flex-row items-center justify-center gap-12 bg-red-950 border-t-4 border-red-500/60 px-8 py-6">
+            <div className="flex h-[30vh] items-center justify-center overflow-hidden rounded-lg bg-white shadow-2xl">
+              {receiptUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={receiptUrl}
+                  alt={`Emergency ticket ${alertData.ticketNumber}`}
+                  className="h-full w-auto object-contain"
+                />
+              ) : (
+                <div className="flex h-full w-40 items-center justify-center px-3 text-center text-sm font-semibold text-gray-500">
+                  Preparing ticket…
                 </div>
+              )}
+            </div>
 
-                <div className="pt-4 border-t border-red-500/30 flex justify-between items-center">
-                  <div>
-                    <span className="text-xs uppercase tracking-wider text-red-300 font-bold">Assigned Destination</span>
-                    <p className="text-2xl font-black text-white">Emergency Room (ER)</p>
-                  </div>
-                  <div className="bg-red-900 border border-red-400 rounded-xl px-4 py-2 text-center">
-                    <span className="text-[10px] uppercase text-red-200 block font-semibold">Priority Tag</span>
-                    <span className="text-2xl font-black text-white">{alertData.ticketNumber}</span>
-                  </div>
+            <div className="flex max-w-md flex-col items-start gap-4">
+              <p
+                className={`text-3xl font-black sm:text-4xl ${
+                  printStatus === "error"
+                    ? "text-yellow-300"
+                    : printStatus === "printed"
+                    ? "text-emerald-300"
+                    : "text-red-100"
+                }`}
+              >
+                {statusText[printStatus]}
+              </p>
+
+              {(printStatus === "generating" || printStatus === "printing") && (
+                <div className="h-3 w-full overflow-hidden rounded-full bg-red-900">
+                  <div className="bica-print-bar h-full w-1/3 rounded-full bg-red-400" />
                 </div>
-              </div>
+              )}
 
-              <div className="flex gap-4">
+              {receiptUrl && (printStatus === "printed" || printStatus === "error") && (
                 <button
                   type="button"
-                  onClick={() => setScreenStep("emergency")}
-                  className="w-1/3 py-4 bg-slate-800 hover:bg-slate-700 text-white font-bold rounded-xl transition-colors text-lg border border-slate-600 cursor-pointer"
+                  onClick={() => doPrint(receiptUrl, alertData)}
+                  className="rounded-xl border border-red-300 bg-red-600 px-6 py-2 text-lg font-bold text-white hover:bg-red-500 active:bg-red-700 cursor-pointer"
                 >
-                  ← Back
+                  Print again
                 </button>
-                <button
-                  type="button"
-                  onClick={handlePrint}
-                  className="w-2/3 py-4 bg-red-600 hover:bg-red-500 active:bg-red-700 text-white text-xl font-bold rounded-xl shadow-lg transition-all border border-red-300 flex items-center justify-center gap-3 cursor-pointer"
-                >
-                  <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-                  </svg>
-                  <span>Print Ticket</span>
-                </button>
-              </div>
+              )}
             </div>
           </div>
         </div>
