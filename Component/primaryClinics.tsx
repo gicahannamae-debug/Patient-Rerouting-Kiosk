@@ -6,7 +6,7 @@ import KioskHeader from "@/Component/kioskHeader";
 // TYPES
 // ─────────────────────────────────────────────────────────────────────────────
 
-type ClinicOption = "General Surgery" | "Internal Medicine" | "OB-GYNE" | "Pediatrics";
+export type ClinicOption = "General Surgery" | "Internal Medicine" | "OB-GYNE" | "Pediatrics";
 
 type StepKey = "category" | "complaint" | "details" | "pain" | "severity";
 type DurationUnit = "hours" | "days" | "weeks" | "months";

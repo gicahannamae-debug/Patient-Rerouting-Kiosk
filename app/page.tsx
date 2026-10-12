@@ -2,8 +2,7 @@
 import { useState } from "react";
 import CcRedflag, { type EmergencyAlert } from "@/Component/ccRedflag";
 import PatientInformation from "@/Component/patientInformation";
-import type { ClinicOption } from "@/Component/desiredClinic";
-import PrimaryClinics from "@/Component/primaryClinics";
+import PrimaryClinics, { type ClinicOption, type PrimaryClinicsPayload } from "@/Component/primaryClinics";
 import VsTemperature from "@/Component/vsTemperature";
 import VsBloodpressure from "@/Component/vsBloodpressure";
 import VsOximeter from "@/Component/vsOximeter";
@@ -77,20 +76,12 @@ type TriageSelection = {
   groupLabel: string;
   ccLabel: string;
   subLabel: string;
-  clinic: ClinicOption;
+  clinic: ClinicOption | null;
   systemValue: string;
   answers: Record<string, boolean>;
 };
 
 type VitalPayload = Partial<VitalData>;
-type PrimaryClinicPayload = {
-  clinic?: ClinicOption;
-  group_label?: string;
-  cc_label?: string;
-  sub_label?: string;
-  system_value?: string;
-  answers?: Record<string, boolean>;
-};
 
 const EMPTY_PATIENT: PatientInfo = {
   lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "",
@@ -98,7 +89,7 @@ const EMPTY_PATIENT: PatientInfo = {
 };
 const EMPTY_VITALS: VitalData = { bpSys: "", bpDia: "", hr: "", spo2: "", temperature: "" };
 const EMPTY_TRIAGE: TriageSelection = {
-  groupLabel: "", ccLabel: "", subLabel: "", clinic: "Family Medicine", systemValue: "", answers: {},
+  groupLabel: "", ccLabel: "", subLabel: "", clinic: null, systemValue: "", answers: {},
 };
 
 // Only consultation tickets exist now
@@ -113,7 +104,6 @@ const clinicDestinations: Record<ClinicOption, string> = {
   "Internal Medicine": "Internal Medicine Unit",
   "OB-GYNE": "OB-GYNE Clinic",
   Pediatrics: "Pediatrics Wing",
-  "Family Medicine": "Family Medicine Hub",
 };
 
 const clinicPrefixes: Record<ClinicOption, string> = {
@@ -121,13 +111,12 @@ const clinicPrefixes: Record<ClinicOption, string> = {
   "Internal Medicine": "IM",
   "OB-GYNE": "OB",
   Pediatrics: "PD",
-  "Family Medicine": "FM",
 };
 
 const getCurrentDate = () => new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
 const getCurrentTime = () => new Date().toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" });
 const generateQueueCode = (clinic: ClinicOption) => {
-  const prefix = clinicPrefixes[clinic] ?? "FM";
+  const prefix = clinicPrefixes[clinic];
   const random = Math.floor(Math.random() * 900) + 100;
   return `${prefix}-${random}`;
 };
@@ -142,8 +131,8 @@ export default function Home() {
   const [patientInfo, setPatientInfo] = useState<PatientInfo>(EMPTY_PATIENT);
   const [vitals, setVitals] = useState<VitalData>(EMPTY_VITALS);
   const [triageSelection, setTriageSelection] = useState<TriageSelection>(EMPTY_TRIAGE);
-  const [queueCode, setQueueCode] = useState("FM-042");
-  const [destination, setDestination] = useState(clinicDestinations["Family Medicine"]);
+  const [queueCode, setQueueCode] = useState("");
+  const [destination, setDestination] = useState("");
   const [date, setDate] = useState(getCurrentDate());
   const [time, setTime] = useState(getCurrentTime());
 
@@ -158,8 +147,8 @@ export default function Home() {
     setPatientInfo(EMPTY_PATIENT);
     setVitals(EMPTY_VITALS);
     setTriageSelection(EMPTY_TRIAGE);
-    setQueueCode("FM-042");
-    setDestination(clinicDestinations["Family Medicine"]);
+    setQueueCode("");
+    setDestination("");
     setDate(getCurrentDate());
     setTime(getCurrentTime());
   };
@@ -244,18 +233,18 @@ export default function Home() {
     setStep("vitals");
   };
 
-  const handlePrimaryClinicsProceed = (payload: PrimaryClinicPayload) => {
-    const clinic = payload?.clinic ?? selectedClinic ?? "Family Medicine";
+  const handlePrimaryClinicsProceed = (payload: PrimaryClinicsPayload) => {
+    const clinic = payload.clinic;
     setSelectedClinic(clinic);
     setDestination(clinicDestinations[clinic]);
     setQueueCode(generateQueueCode(clinic));
     setTriageSelection({
-      groupLabel: payload?.group_label ?? "",
-      ccLabel: payload?.cc_label ?? "",
-      subLabel: payload?.sub_label ?? "",
+      groupLabel: payload.group_label,
+      ccLabel: payload.cc_label,
+      subLabel: payload.sub_label,
       clinic,
-      systemValue: payload?.system_value ?? "",
-      answers: payload?.answers ?? {},
+      systemValue: payload.system_value,
+      answers: payload.answers,
     });
     updateTicketDateTime();
     setStep("summary");
@@ -269,7 +258,7 @@ export default function Home() {
 
   const patientName = `${patientInfo.lastName}, ${patientInfo.firstName} ${patientInfo.middleName}`.trim();
   const complaints = triageSelection.subLabel || triageSelection.ccLabel || triageSelection.groupLabel || "No chief complaint selected";
-  const clinic = selectedClinic ?? triageSelection.clinic ?? "Family Medicine";
+  const clinic = selectedClinic ?? triageSelection.clinic ?? "";
 
   return (
     <div
