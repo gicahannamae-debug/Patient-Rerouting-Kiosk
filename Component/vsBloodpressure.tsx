@@ -51,6 +51,56 @@ export default function VsBloodpressure({
 
   const showCriticalBpOverlay = alertTriggered && !!criticalBpMessage;
 
+  //ADDED 10-14-2026
+  const [activeField, setActiveField] = useState<
+    "systolic" | "diastolic" | null
+  >(null);
+
+  const updateActiveValue = (digit: string) => {
+    if (!activeField) return;
+
+    const current = activeField === "systolic" ? systolic : diastolic;
+
+    // Allow up to 3 digits only.
+    if (current.length >= 3) return;
+
+    const nextValue = current + digit;
+
+    if (activeField === "systolic") {
+      setSystolic(nextValue);
+    } else {
+      setDiastolic(nextValue);
+    }
+
+    setAlertTriggered(false);
+  };
+
+  const clearActiveValue = () => {
+    if (activeField === "systolic") {
+      setSystolic("");
+    } else if (activeField === "diastolic") {
+      setDiastolic("");
+    }
+
+    setAlertTriggered(false);
+  };
+
+  const backspaceActiveValue = () => {
+    if (activeField === "systolic") {
+      setSystolic((previous) => previous.slice(0, -1));
+    } else if (activeField === "diastolic") {
+      setDiastolic((previous) => previous.slice(0, -1));
+    }
+
+    setAlertTriggered(false);
+  };
+
+  const [showConfirmPopup, setShowConfirmPopup] = useState(false);
+
+  const [showValidationPopup, setShowValidationPopup] = useState(false);
+
+  //END OF ADDED 10-14-2026
+
   return (
     <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
       {showCriticalBpOverlay && (
@@ -126,10 +176,17 @@ export default function VsBloodpressure({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                setAlertTriggered(true);
-                if (isValidSystolic && isValidDiastolic && !criticalBpMessage) {
-                  onProceed?.({ bpSys: systolic, bpDia: diastolic });
+
+                if (!isValidSystolic || !isValidDiastolic) {
+                  setAlertTriggered(false);
+                  setShowConfirmPopup(false);
+                  setShowValidationPopup(true);
+                  return;
                 }
+
+                setShowValidationPopup(false);
+                setAlertTriggered(false);
+                setShowConfirmPopup(true);
               }}
               className="flex flex-col gap-[1rem] bg-cyan-950 rounded-2xl p-[1rem]"
             >
@@ -138,13 +195,17 @@ export default function VsBloodpressure({
                   Systolic (mmHg) <span className="text-red-400">*</span>
                 </label>
                 <input
-                  type="number"
-                  placeholder="e.g. 120"
-                  min="60"
-                  max="300"
+                  type="text"
+                  inputMode="none"
+                  readOnly
+                  placeholder="Tap to enter"
                   value={systolic}
-                  onChange={(e) => setSystolic(e.target.value)}
-                  className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  onClick={() => setActiveField("systolic")}
+                  aria-label="Systolic blood pressure in mmHg"
+                  className={`w-full text-[1rem] text-cyan-950 border ${activeField === "systolic"
+                    ? "border-orange-400 ring-2 ring-orange-300"
+                    : "border-stone-300"
+                    } bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] cursor-pointer focus:outline-none`}
                 />
               </section>
 
@@ -153,15 +214,86 @@ export default function VsBloodpressure({
                   Diastolic (mmHg) <span className="text-red-400">*</span>
                 </label>
                 <input
-                  type="number"
-                  placeholder="e.g. 80"
-                  min="40"
-                  max="200"
+                  type="text"
+                  inputMode="none"
+                  readOnly
+                  placeholder="Tap to enter"
                   value={diastolic}
-                  onChange={(e) => setDiastolic(e.target.value)}
-                  className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  onClick={() => setActiveField("diastolic")}
+                  aria-label="Diastolic blood pressure in mmHg"
+                  className={`w-full text-[1rem] text-cyan-950 border ${activeField === "diastolic"
+                    ? "border-orange-400 ring-2 ring-orange-300"
+                    : "border-stone-300"
+                    } bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] cursor-pointer focus:outline-none`}
                 />
               </section>
+
+              {
+              // NUMPAD UI 10-14-2026
+              activeField && (
+                <section className="rounded-xl border border-cyan-600 bg-cyan-900 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="text-lg font-bold text-white">
+                      {activeField === "systolic" ? "Systolic" : "Diastolic"} Keypad
+                    </h3>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveField(null)}
+                      className="rounded-md bg-cyan-800 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+                    >
+                      Done
+                    </button>
+                  </div>
+
+                  <div className="mb-3 text-center text-sm text-cyan-200">
+                    {activeField === "systolic"
+                      ? "Allowed range: 60–300 mmHg"
+                      : "Allowed range: 40–200 mmHg"}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(
+                      (digit) => (
+                        <button
+                          key={digit}
+                          type="button"
+                          onClick={() => updateActiveValue(digit)}
+                          className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 active:bg-orange-300"
+                        >
+                          {digit}
+                        </button>
+                      )
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={clearActiveValue}
+                      className="min-h-14 rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-500"
+                    >
+                      Clear
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => updateActiveValue("0")}
+                      className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200"
+                    >
+                      0
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={backspaceActiveValue}
+                      aria-label="Delete last digit"
+                      className="min-h-14 rounded-lg bg-cyan-700 text-xl font-bold text-white hover:bg-cyan-600"
+                    >
+                      ⌫
+                    </button>
+                  </div>
+                </section>
+              )}
+
 
               {/* Patient Blood Pressure Results */}
               <div className="flex flex-col gap-[0.75rem]">
@@ -184,6 +316,130 @@ export default function VsBloodpressure({
                   )}
                 </div>
               </div>
+
+              {
+              // POP UP FOR CONFIRMATION OF BLOOD PRESSURE READINGS 10-14-2026
+              showValidationPopup && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
+                  <div className="w-full max-w-xl rounded-2xl border-2 border-red-500 bg-cyan-950 p-8 text-center shadow-2xl">
+                    <h3 className="mb-4 text-3xl font-extrabold text-red-400">
+                      Invalid Blood Pressure Readings
+                    </h3>
+
+                    <p className="mb-6 text-lg text-cyan-200">
+                      Please enter valid values within the allowed ranges before proceeding.
+                    </p>
+
+                    <div className="mb-6 space-y-3 text-left">
+                      {!isValidSystolic && (
+                        <div className="rounded-xl border border-red-500 bg-red-950/50 p-4">
+                          <p className="font-bold text-white">Systolic (mmHg)</p>
+                          <p className="text-red-300">
+                            {systolic.trim() === ""
+                              ? "Please enter the systolic reading."
+                              : "Enter a valid systolic value between 60 and 300 mmHg."}
+                          </p>
+                        </div>
+                      )}
+
+                      {!isValidDiastolic && (
+                        <div className="rounded-xl border border-red-500 bg-red-950/50 p-4">
+                          <p className="font-bold text-white">Diastolic (mmHg)</p>
+                          <p className="text-red-300">
+                            {diastolic.trim() === ""
+                              ? "Please enter the diastolic reading."
+                              : "Enter a valid diastolic value between 40 and 200 mmHg."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowValidationPopup(false);
+                        setActiveField(!isValidSystolic ? "systolic" : "diastolic");
+                      }}
+                      className="rounded-lg bg-orange-50 px-8 py-3 text-lg font-bold text-cyan-950 hover:bg-orange-100"
+                    >
+                      Correct Values
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {
+              // POP UP FOR CONFIRMATION OF BLOOD PRESSURE 10-14-2026
+              showConfirmPopup && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-6">
+                  <div className="w-full max-w-xl rounded-2xl border-2 border-cyan-500 bg-cyan-950 p-8 text-center shadow-2xl">
+                    <h3 className="mb-4 text-3xl font-extrabold text-white">
+                      Confirm Blood Pressure
+                    </h3>
+
+                    <p className="mb-6 text-lg text-cyan-200">
+                      Please verify that these readings match the values displayed on the
+                      blood pressure machine.
+                    </p>
+
+                    <div className="mb-6 grid grid-cols-2 gap-4">
+                      <div className="rounded-xl border border-cyan-600 bg-cyan-900 p-5">
+                        <p className="mb-2 text-sm font-semibold text-cyan-200">
+                          SYSTOLIC
+                        </p>
+                        <p className="text-4xl font-extrabold text-white">
+                          {systolic} <span className="text-lg">mmHg</span>
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-cyan-600 bg-cyan-900 p-5">
+                        <p className="mb-2 text-sm font-semibold text-cyan-200">
+                          DIASTOLIC
+                        </p>
+                        <p className="text-4xl font-extrabold text-white">
+                          {diastolic} <span className="text-lg">mmHg</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="mb-6 text-base text-yellow-300">
+                      Are these values correct?
+                    </p>
+
+                    <div className="flex flex-col justify-center gap-3 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => setShowConfirmPopup(false)}
+                        className="rounded-lg bg-stone-200 px-6 py-3 text-lg font-bold text-cyan-950 hover:bg-stone-300"
+                      >
+                        Go Back
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowConfirmPopup(false);
+
+                          if (criticalBpMessage) {
+                            // Show the emergency alert only after confirmation.
+                            setAlertTriggered(true);
+                            return;
+                          }
+
+                          onProceed?.({
+                            bpSys: systolic,
+                            bpDia: diastolic,
+                          });
+                        }}
+                        className="rounded-lg bg-orange-50 px-6 py-3 text-lg font-bold text-cyan-950 hover:bg-orange-100"
+                      >
+                        Yes, Confirm
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+
 
               {/* Buttons */}
               <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">

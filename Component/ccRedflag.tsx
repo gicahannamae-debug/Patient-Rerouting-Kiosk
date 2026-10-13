@@ -8,12 +8,14 @@ type ClinicName = "OB-GYN" | "Internal Medicine" | "Surgery" | "Pediatrics";
 
 interface Experience {
   text: string;
+  textCeb: string;
   clinics: ClinicName[];
 }
 
 interface RedFlagCategory {
   id: string;
   name: string;
+  nameCeb: string;
   clinical: string;
   experiences: Experience[];
 }
@@ -59,46 +61,119 @@ const PED: ClinicName = "Pediatrics";
 
 const EMERGENCY_TITLE = "Life-Threatening Emergencies (The ABCs)";
 
+
 const CATEGORIES: RedFlagCategory[] = [
   {
     id: "airway",
     name: "Choking & Mouth/Throat Blockages",
+    nameCeb: "Pagtuok ug Pagbabag sa Baba o Tutunlan",
     clinical: "A – Airway",
     experiences: [
-      { clinics: [OBG, IM, SUR], text: "Cannot speak, cough, or breathe due to a blocked throat." },
-      { clinics: [OBG, IM, SUR], text: "Severe allergic reaction causing the tongue or throat to swell shut." },
-      { clinics: [PED], text: "Child swallowed an object (toy, coin) and is gasping or turning blue." },
-      { clinics: [PED], text: "Child is choking and cannot make any sound or cry." },
+      {
+        clinics: [OBG, IM, SUR],
+        text: "Cannot speak, cough, or breathe due to a blocked throat.",
+        textCeb: "Dili makasulti, makaubo, o makaginhawa tungod sa pagbabag sa tutunlan.",
+      },
+      {
+        clinics: [OBG, IM, SUR],
+        text: "Severe allergic reaction causing the tongue or throat to swell shut.",
+        textCeb: "Grabe nga reaksiyon sa alerhiya nga maoy hinungdan sa paghubag sa dila o tutunlan hangtod mababagan ang pagginhawa.",
+      },
+      {
+        clinics: [PED],
+        text: "Child swallowed an object (toy, coin) and is gasping or turning blue.",
+        textCeb: "Nakalamoy ang bata og butang (sama sa dulaan o sensilyo) ug naglisod pagginhawa o nangasul ang panit.",
+      },
+      {
+        clinics: [PED],
+        text: "Child is choking and cannot make any sound or cry.",
+        textCeb: "Natuk-an ang bata ug dili makahimo og tingog o makahilak.",
+      },
     ],
   },
   {
     id: "breathing",
     name: "Severe Breathing Difficulty",
+    nameCeb: "Grabe nga Kalisod sa Pagginhawa",
     clinical: "B – Breathing",
     experiences: [
-      { clinics: [IM, SUR], text: "Sudden, severe shortness of breath or gasping for air." },
-      { clinics: [IM, SUR], text: "Unable to speak a full sentence without stopping to breathe." },
-      { clinics: [OBG], text: "Sudden, sharp chest pain with extreme shortness of breath during pregnancy." },
-      { clinics: [PED], text: "Child is breathing dangerously fast." },
-      { clinics: [PED], text: "Child's ribs pull in tightly with each breath (sucking in under the chest)." },
+      {
+        clinics: [IM, SUR],
+        text: "Sudden, severe shortness of breath or gasping for air.",
+        textCeb: "Kalit ug grabeng kalisod sa pagginhawa o hangos nga pagpangita og hangin.",
+      },
+      {
+        clinics: [IM, SUR],
+        text: "Unable to speak a full sentence without stopping to breathe.",
+        textCeb: "Dili makahuman og sulti sa usa ka tibuok nga sentence nga dili mohunong aron moginhawa.",
+      },
+      {
+        clinics: [OBG],
+        text: "Sudden, sharp chest pain with extreme shortness of breath during pregnancy.",
+        textCeb: "Kalit ug tusok nga sakit sa dughan uban sa grabeng kalisod sa pagginhawa samtang nagmabdos.",
+      },
+      {
+        clinics: [PED],
+        text: "Child is breathing dangerously fast.",
+        textCeb: "Delikado kaayo kapaspas ang pagginhawa sa bata.",
+      },
+      {
+        clinics: [PED],
+        text: "Child's ribs pull in tightly with each breath (sucking in under the chest).",
+        textCeb: "Mokulob pag-ayo ang palibot sa gusok sa bata sa matag ginhawa, ilabi na sa ilawom sa dughan.",
+      },
     ],
   },
   {
     id: "circulation",
     name: "Chest Pain & Severe Bleeding",
+    nameCeb: "Sakit sa Dughan ug Grabeng Pagdugo",
     clinical: "C – Circulation",
     experiences: [
-      { clinics: [IM], text: "Heavy, crushing chest pain or pressure spreading to the arm or jaw." },
-      { clinics: [IM], text: "Heart racing dangerously fast out of nowhere with dizziness." },
-      { clinics: [OBG], text: "Heavy vaginal bleeding during pregnancy (soaking a menstrual pad in 1 hour)." },
-      { clinics: [OBG], text: "Sudden, gushing loss of blood." },
-      { clinics: [PED], text: "Child is completely pale or blue around the lips." },
-      { clinics: [PED], text: "Heavy bleeding from a deep wound that won't stop with pressure." },
-      { clinics: [SUR], text: "Blood is spurting heavily from a deep cut or severe injury." },
-      { clinics: [SUR], text: "Bleeding that does not stop after 10 minutes of direct pressure." },
+      {
+        clinics: [IM],
+        text: "Heavy, crushing chest pain or pressure spreading to the arm or jaw.",
+        textCeb: "Grabe ug murag gipislit o gipugos nga sakit o kabug-at sa dughan nga mikaylap ngadto sa bukton o apapangig.",
+      },
+      {
+        clinics: [IM],
+        text: "Heart racing dangerously fast out of nowhere with dizziness.",
+        textCeb: "Kalit nga kusog ug kapaspas nga pagpitik sa kasingkasing uban sa pagkalipong.",
+      },
+      {
+        clinics: [OBG],
+        text: "Heavy vaginal bleeding during pregnancy (soaking a menstrual pad in 1 hour).",
+        textCeb: "Grabeng pagdugo gikan sa puwerta samtang nagmabdos (mabasa pag-ayo sa dugo ang usa ka menstrual pad sulod sa usa ka oras).",
+      },
+      {
+        clinics: [OBG],
+        text: "Sudden, gushing loss of blood.",
+        textCeb: "Kalit ug kusog nga pag-agas sa dugo.",
+      },
+      {
+        clinics: [PED],
+        text: "Child is completely pale or blue around the lips.",
+        textCeb: "Grabeng pamutla sa bata o pagkangulon sa palibot sa mga ngabil.",
+      },
+      {
+        clinics: [PED],
+        text: "Heavy bleeding from a deep wound that won't stop with pressure.",
+        textCeb: "Grabeng pagdugo gikan sa lawom nga samad nga dili mohunong bisan pugngan o pisliton.",
+      },
+      {
+        clinics: [SUR],
+        text: "Blood is spurting heavily from a deep cut or severe injury.",
+        textCeb: "Kusog nga nagbuswak ang dugo gikan sa lawom nga samad o grabeng kadaot.",
+      },
+      {
+        clinics: [SUR],
+        text: "Bleeding that does not stop after 10 minutes of direct pressure.",
+        textCeb: "Pagdugo nga dili mohunong human pugngan o pisliton diretso sulod sa 10 minutos.",
+      },
     ],
   },
 ];
+
 
 const STEPS = [
   "Welcome",
@@ -186,7 +261,7 @@ function buildReceiptImage(data: { symptom: string; ticketNumber: string }): str
     y += 16;
   };
 
-    // Header
+  // Header
   centered("Welcome to Bica", 48);
   centered("Emergency Triage Slip", 24, "normal");
   centered("OPD Kiosk", 24, "normal");
@@ -241,10 +316,10 @@ function buildReceiptImage(data: { symptom: string; ticketNumber: string }): str
   centered(data.ticketNumber, size);
   dashed();
 
-        {/* FOOTER */}
-      <footer className="w-full py-4 px-8 text-center text-cyan-300/60 text-sm border-t border-cyan-900">
-        BICA Outpatient Self-Service Kiosk
-      </footer>
+  {/* FOOTER */ }
+  <footer className="w-full py-4 px-8 text-center text-cyan-300/60 text-sm border-t border-cyan-900">
+    BICA Outpatient Self-Service Kiosk
+  </footer>
 
   // Crop to content (+ bottom margin so the cutter doesn't clip the text)
   const out = document.createElement("canvas");
@@ -302,6 +377,7 @@ export default function CcRedflag({
   onPrintEmergencyTicket,
   onEmergencyDone,
 }: CcRedflagProps) {
+  const [language, setLanguage] = useState<"en" | "ceb">("en");
   const [screenStep, setScreenStep] = useState<ScreenStep>("welcome");
   const [alertData, setAlertData] = useState({ symptom: "", ticketNumber: "" });
 
@@ -313,6 +389,35 @@ export default function CcRedflag({
   const printedFor = useRef<string | null>(null);
 
   const selectedCategory = CATEGORIES.find(c => c.id === categoryId) ?? null;
+
+
+  // ADDED 10-14-2026
+
+
+  const experienceGroups = selectedCategory
+  ? Object.values(
+      selectedCategory.experiences.reduce<
+        Record<
+          string,
+          { clinics: ClinicName[]; experiences: Experience[] }
+        >
+      >((groups, exp) => {
+        const key = exp.clinics.join("|");
+
+        if (!groups[key]) {
+          groups[key] = {
+            clinics: exp.clinics,
+            experiences: [],
+          };
+        }
+
+        groups[key].experiences.push(exp);
+        return groups;
+      }, {})
+    )
+  : [];
+
+  //END OF ADDED 10-14-2026
 
   // ── Printing ────────────────────────────────────────────────────────────────
 
@@ -435,8 +540,8 @@ export default function CcRedflag({
     screenStep === "welcome"
       ? 0
       : screenStep === "erTicket"
-      ? STEPS.length - 1
-      : SAFETY_STEP_INDEX;
+        ? STEPS.length - 1
+        : SAFETY_STEP_INDEX;
 
   const currentPart = view === "experiences" ? 2 : 1;
 
@@ -483,98 +588,241 @@ export default function CcRedflag({
         onLogout={onLogout}
       />
 
+
+      {/* START OF UI COMPONENTS -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/}
+
+
       {/* STEP 0: WELCOME */}
       {screenStep === "welcome" && (
         <div className="flex-1 flex flex-col items-center justify-center px-8 py-16 max-w-5xl mx-auto text-center my-auto w-full">
-          <div className="inline-block bg-yellow-400 text-cyan-950 text-xl font-extrabold tracking-widest uppercase px-8 py-3 rounded-full mb-10 border-2 border-yellow-300 shadow-lg">
-            Welcome to the Outpatient Department
+
+          <div className="inline-block bg-yellow-400 text-cyan-950 text-xl font-extrabold tracking-widest uppercase px-8 py-3 rounded-full mb-8 border-2 border-yellow-300 shadow-lg">
+            {language === "en"
+              ? "Welcome to the Outpatient Department"
+              : "Maayong pag-abot sa Outpatient Department"}
           </div>
 
-          <div className="w-full bg-cyan-900/30 border border-cyan-500/30 rounded-3xl p-10 backdrop-blur-sm shadow-2xl flex flex-col items-center gap-10">
-            <p className="text-3xl sm:text-4xl text-cyan-100 max-w-3xl leading-relaxed font-semibold tracking-wide">
-              For your safety, please answer the questions. <br className="hidden sm:inline" />
-              Tap the box that <span className="font-extrabold text-white underline decoration-yellow-400 underline-offset-8">applies to you</span>.
+          <div className="w-full bg-cyan-900/30 border border-cyan-500/30 rounded-3xl p-8 sm:p-10 backdrop-blur-sm shadow-2xl flex flex-col items-center gap-8">
+
+            {/* LANGUAGE SELECTOR */}
+            <div className="w-full max-w-2xl">
+              <p className="text-xl sm:text-2xl text-cyan-100 font-bold mb-5">
+                {language === "en"
+                  ? "Select your preferred language"
+                  : "Pilia ang imong gustong pinulongan"}
+              </p>
+
+              <div className="grid grid-cols-2 gap-4">
+                <button
+                  type="button"
+                  onClick={() => setLanguage("en")}
+                  aria-pressed={language === "en"}
+                  className={`py-5 px-4 rounded-2xl text-xl sm:text-2xl font-extrabold border-2 transition-all cursor-pointer ${language === "en"
+                    ? "bg-yellow-400 text-cyan-950 border-yellow-300 shadow-lg scale-[1.02]"
+                    : "bg-cyan-950/50 text-cyan-100 border-cyan-500/40 hover:bg-cyan-800/60"
+                    }`}
+                >
+                  🇺🇸 English
+                  {language === "en" && (
+                    <span className="block text-sm mt-1">✓ Selected</span>
+                  )}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setLanguage("ceb")}
+                  aria-pressed={language === "ceb"}
+                  className={`py-5 px-4 rounded-2xl text-xl sm:text-2xl font-extrabold border-2 transition-all cursor-pointer ${language === "ceb"
+                    ? "bg-yellow-400 text-cyan-950 border-yellow-300 shadow-lg scale-[1.02]"
+                    : "bg-cyan-950/50 text-cyan-100 border-cyan-500/40 hover:bg-cyan-800/60"
+                    }`}
+                >
+                  🇵🇭 Cebuano
+                  {language === "ceb" && (
+                    <span className="block text-sm mt-1">✓ Napili</span>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* WELCOME INSTRUCTIONS */}
+            <p className="text-2xl sm:text-4xl text-cyan-100 max-w-3xl leading-relaxed font-semibold tracking-wide">
+              {language === "en" ? (
+                <>
+                  For your safety, please answer the questions.
+                  <br className="hidden sm:inline" />
+                  Tap the box that{" "}
+                  <span className="font-extrabold text-white underline decoration-yellow-400 underline-offset-8">
+                    applies to you
+                  </span>.
+                </>
+              ) : (
+                <>
+                  Alang sa imong kaluwasan, palihog tubaga ang mga pangutana.
+                  <br className="hidden sm:inline" />
+                  Pindota ang kahon nga{" "}
+                  <span className="font-extrabold text-white underline decoration-yellow-400 underline-offset-8">
+                    angay kanimo
+                  </span>.
+                </>
+              )}
             </p>
 
+            {/* START BUTTON */}
             <button
-              onClick={() => { resetScreening(); setScreenStep("screening"); }}
-              className="w-full max-w-2xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-3xl sm:text-4xl font-black py-7 px-10 rounded-2xl shadow-[0_10px_30px_rgba(5,150,105,0.4)] transition-all active:scale-95 border-2 border-emerald-300 flex items-center justify-center gap-6 cursor-pointer tracking-wider"
+              onClick={() => {
+                resetScreening();
+                setScreenStep("screening");
+              }}
+              className="w-full max-w-2xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-2xl sm:text-4xl font-black py-7 px-6 sm:px-10 rounded-2xl shadow-[0_10px_30px_rgba(5,150,105,0.4)] transition-all active:scale-95 border-2 border-emerald-300 flex items-center justify-center gap-4 sm:gap-6 cursor-pointer tracking-wider"
             >
-              <span>START SAFETY CHECK</span>
+              <span>
+                {language === "en"
+                  ? "START SAFETY CHECK"
+                  : "SUGDI ANG SAFETY CHECK"}
+              </span>
               <span className="text-4xl sm:text-5xl">→</span>
             </button>
+
           </div>
         </div>
       )}
 
+
+
       {/* STEP 1: SAFETY CHECK (Emergency only) */}
       {screenStep === "screening" && (
         <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-6xl mx-auto w-full">
+
           <div className="text-center w-full mb-6">
-            <h2 className="text-5xl font-bold text-white">Safety Check</h2>
+            <h2 className="text-5xl font-bold text-white">
+              {language === "en" ? "Safety Check" : "Pagsusi sa Kaluwasan"}
+            </h2>
+
             <p className="text-2xl text-cyan-200 mt-2">
               {view === "categories"
-                ? "Are you experiencing any of the following right now?"
-                : `${selectedCategory?.name} — which one applies to you?`}
+                ? language === "en"
+                  ? "Are you experiencing any of the following right now?"
+                  : "Nasinati ba nimo ang bisan hain niini karon?"
+                : language === "en"
+                  ? `${selectedCategory?.name} — which one applies to you?`
+                  : `${selectedCategory?.name} — hain niini ang imong nasinati?`}
             </p>
           </div>
 
           <div className="w-full bg-red-950/90 border-red-500/60 border-2 rounded-3xl p-8 shadow-2xl backdrop-blur-sm">
+
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-red-500/30 pb-4 mb-6">
+
               <div className="flex items-center gap-3 text-red-300 font-bold uppercase tracking-wider text-base">
-                <svg xmlns="http://www.w3.org/2000/svg" className="w-7 h-7 flex-shrink-0 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  className="w-7 h-7 flex-shrink-0 text-red-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
+                  />
                 </svg>
-                <span>Emergency Check: {EMERGENCY_TITLE}</span>
+
+                <span>
+                  {language === "en"
+                    ? `Emergency Check: ${EMERGENCY_TITLE}`
+                    : `Pagsusi sa Emerhensiya: ${EMERGENCY_TITLE}`}
+                </span>
               </div>
+
               <span className="text-sm text-red-100 bg-red-900 border-red-600 px-4 py-1.5 rounded-full border font-semibold self-start sm:self-auto">
-                {view === "categories" ? "Tap the one that applies" : "Tap what you are experiencing"}
+                {view === "categories"
+                  ? language === "en"
+                    ? "Tap the one that applies"
+                    : "Pilia ang angay kanimo"
+                  : language === "en"
+                    ? "Tap what you are experiencing"
+                    : "Pilia ang imong nasinati"}
               </span>
             </div>
 
             <div className="min-h-[360px] flex flex-col justify-between gap-6">
+
+              {/* CATEGORY SELECTION */}
               {view === "categories" && (
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-5 justify-items-center">
                   {CATEGORIES.map(cat => (
                     <button
                       key={cat.id}
                       type="button"
                       onClick={() => handleSelectCategory(cat.id)}
-                      className="bg-red-900/70 border-red-500/50 hover:bg-red-700 border rounded-2xl p-6 text-left active:scale-[0.98] transition-all cursor-pointer group flex items-center min-h-[180px]"
+                      className="w-full max-w-md bg-red-900/70 border-red-500/50 hover:bg-red-700 border rounded-2xl p-6 text-left active:scale-[0.98] transition-all cursor-pointer group flex items-center justify-center min-h-[180px]"
                     >
-                      <p className="text-red-50 group-hover:text-white text-3xl font-bold leading-snug">
-                        {cat.name}
+                      <p className="text-red-50 group-hover:text-white text-3xl font-bold leading-snug text-center">
+                        {language === "en"
+                          ? cat.name
+                          : cat.nameCeb ?? cat.name}
                       </p>
                     </button>
                   ))}
                 </div>
               )}
-
+              
+              {/* EXPERIENCE SELECTION */}
               {view === "experiences" && selectedCategory && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                  {selectedCategory.experiences.map((exp, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      onClick={() => handleSelectExperience(exp)}
-                      className="bg-red-900/70 border-red-500/50 hover:bg-red-700 border rounded-2xl p-6 text-left active:scale-[0.98] transition-all cursor-pointer group flex items-center min-h-[160px]"
-                    >
-                      <p className="text-red-50 group-hover:text-white text-2xl font-semibold leading-relaxed">
-                        {exp.text}
-                      </p>
-                    </button>
+                <div className="flex flex-col gap-8">
+                  {experienceGroups.map((group, groupIndex) => (
+                    <section key={groupIndex} className="w-full">
+                      {/* CLINIC GROUP HEADING */}
+                      <div className="flex items-center gap-3 mb-4 border-b border-red-500/40 pb-3">
+                        <div className="h-8 w-1.5 rounded-full bg-yellow-400" />
+
+                        <h3 className="text-xl sm:text-2xl font-extrabold text-yellow-300">
+                          {group.clinics.join(" • ")}
+                        </h3>
+
+                        <span className="ml-auto text-sm text-red-200">
+                          {group.experiences.length}{" "}
+                          {language === "en" ? "options" : "kapilian"}
+                        </span>
+                      </div>
+
+                      {/* SYMPTOM SELECTIONS */}
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 justify-items-center">
+                        {group.experiences.map((exp, i) => (
+                          <button
+                            key={i}
+                            type="button"
+                            onClick={() => handleSelectExperience(exp)}
+                            className="w-full max-w-xl min-h-[140px] flex items-center justify-center rounded-2xl border border-red-500/50 bg-red-900/70 p-6 text-center transition-all hover:bg-red-700 active:scale-[0.98] cursor-pointer group"
+                          >
+                            <p className="text-xl sm:text-2xl font-semibold leading-relaxed text-red-50 group-hover:text-white">
+                              {language === "en"
+                                ? exp.text
+                                : exp.textCeb ?? exp.text}
+                            </p>
+                          </button>
+                        ))}
+                      </div>
+                    </section>
                   ))}
                 </div>
               )}
 
+              {/* NAVIGATION BUTTONS */}
               <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-6 border-t border-red-500/30">
+
                 {view === "experiences" ? (
                   <button
                     type="button"
                     onClick={handlePrevious}
                     className="w-full sm:w-auto px-6 py-4 bg-transparent border border-white/30 text-white text-lg font-semibold rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
                   >
-                    ← Choose another category
+                    {language === "en"
+                      ? "← Choose another category"
+                      : "← Pagpili og laing kategorya"}
                   </button>
                 ) : (
                   <span />
@@ -586,14 +834,18 @@ export default function CcRedflag({
                     onClick={handleNone}
                     className="w-full sm:w-auto px-8 py-4 bg-cyan-900 border-2 border-cyan-400 text-white text-xl font-bold rounded-xl hover:bg-cyan-800 transition-colors shadow-lg cursor-pointer"
                   >
-                    NONE apply — Proceed to Registration →
+                    {language === "en"
+                      ? "NONE apply — Proceed to Registration →"
+                      : "WALA niini — Padayon sa Pagparehistro →"}
                   </button>
                 )}
+
               </div>
             </div>
           </div>
         </div>
       )}
+
 
       {/* STEP 2: EMERGENCY ALERT (silent, flashing red) */}
       {screenStep === "emergency" && (
@@ -677,13 +929,12 @@ export default function CcRedflag({
 
             <div className="flex max-w-md flex-col items-start gap-4">
               <p
-                className={`text-3xl font-black sm:text-4xl ${
-                  printStatus === "error"
-                    ? "text-yellow-300"
-                    : printStatus === "printed"
+                className={`text-3xl font-black sm:text-4xl ${printStatus === "error"
+                  ? "text-yellow-300"
+                  : printStatus === "printed"
                     ? "text-emerald-300"
                     : "text-red-100"
-                }`}
+                  }`}
               >
                 {statusText[printStatus]}
               </p>

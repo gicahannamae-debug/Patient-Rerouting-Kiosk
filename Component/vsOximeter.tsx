@@ -59,6 +59,53 @@ export default function vsOximeter({
 
   const showCriticalOximeterOverlay = alertTriggered && !!criticalOximeterMessage;
 
+// ADDED 10-14-2026
+
+  const [activeField, setActiveField] = useState<"spo2" | "heartRate" | null>(null);
+  const [showConfirmPopup, setShowConfirmPopup] = useState(false);
+
+  const updateActiveValue = (digit: string) => {
+    if (!activeField) return;
+
+    const current = activeField === "spo2" ? spo2 : heartRate;
+
+    if (current.length >= 3) return;
+
+    const nextValue = current + digit;
+
+    if (activeField === "spo2") {
+      setSpo2(nextValue);
+    } else {
+      setHeartRate(nextValue);
+    }
+
+    setAlertTriggered(false);
+  };
+
+  const clearActiveValue = () => {
+    if (activeField === "spo2") {
+      setSpo2("");
+    } else if (activeField === "heartRate") {
+      setHeartRate("");
+    }
+
+    setAlertTriggered(false);
+  };
+
+  const backspaceActiveValue = () => {
+    if (activeField === "spo2") {
+      setSpo2((previous) => previous.slice(0, -1));
+    } else if (activeField === "heartRate") {
+      setHeartRate((previous) => previous.slice(0, -1));
+    }
+
+    setAlertTriggered(false);
+  };
+
+  const [showValidationPopup, setShowValidationPopup] = useState(false);
+
+  //END OF ADDED 10-14-2026
+
   return (
 
     <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
@@ -139,10 +186,16 @@ export default function vsOximeter({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                setAlertTriggered(true);
-                if (isValidSpo2 && isValidHeartRate && !criticalOximeterMessage) {
-                  onProceed?.({ spo2, hr: heartRate });
+
+                if (!isValidSpo2 || !isValidHeartRate) {
+                  setAlertTriggered(false);
+                  setShowValidationPopup(true);
+                  return;
                 }
+
+                setShowValidationPopup(false);
+                setAlertTriggered(false);
+                setShowConfirmPopup(true);
               }}
               className="flex flex-col gap-[1rem]"
             >
@@ -152,13 +205,13 @@ export default function vsOximeter({
                   SpO₂ (%) <span className="text-red-400">*</span>
                 </label>
                 <input
-                  type="number"
-                  placeholder="e.g. 98"
-                  min="50"
-                  max="100"
+                  type="text"
+                  inputMode="none"
+                  readOnly
+                  placeholder="Tap to enter SpO₂"
                   value={spo2}
-                  onChange={(e) => setSpo2(e.target.value)}
-                  className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  onClick={() => setActiveField("spo2")}
+                  className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300 cursor-pointer"
                 />
               </section>
 
@@ -167,15 +220,82 @@ export default function vsOximeter({
                   Heart Rate (bpm) <span className="text-red-400">*</span>
                 </label>
                 <input
-                  type="number"
-                  placeholder="e.g. 72"
-                  min="30"
-                  max="250"
+                  type="text"
+                  inputMode="none"
+                  readOnly
+                  placeholder="Tap to enter Heart Rate"
                   value={heartRate}
-                  onChange={(e) => setHeartRate(e.target.value)}
-                  className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
+                  onClick={() => setActiveField("heartRate")}
+                  className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300 cursor-pointer"
                 />
               </section>
+
+           
+              {
+              // NUM PAD UI 10-14-2026
+              activeField && (
+                <section className="rounded-xl border border-cyan-600 bg-cyan-900 p-4">
+                  <div className="mb-3 flex items-center justify-between gap-2">
+                    <h3 className="text-lg font-bold text-white">
+                      {activeField === "spo2" ? "SpO₂" : "Heart Rate"} Keypad
+                    </h3>
+
+                    <button
+                      type="button"
+                      onClick={() => setActiveField(null)}
+                      className="rounded-md bg-cyan-800 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+                    >
+                      Done
+                    </button>
+                  </div>
+
+                  <div className="mb-3 text-center text-sm text-cyan-200">
+                    {activeField === "spo2"
+                      ? "Allowed range: 50–100%"
+                      : "Allowed range: 30–250 bpm"}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(
+                      (digit) => (
+                        <button
+                          key={digit}
+                          type="button"
+                          onClick={() => updateActiveValue(digit)}
+                          className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 active:bg-orange-300"
+                        >
+                          {digit}
+                        </button>
+                      )
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={clearActiveValue}
+                      className="min-h-14 rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-500"
+                    >
+                      Clear
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => updateActiveValue("0")}
+                      className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200"
+                    >
+                      0
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={backspaceActiveValue}
+                      aria-label="Delete last digit"
+                      className="min-h-14 rounded-lg bg-cyan-700 text-xl font-bold text-white hover:bg-cyan-600"
+                    >
+                      ⌫
+                    </button>
+                  </div>
+                </section>
+              )}
 
               {/* Patient Oxygen Results */}
               <div className="flex flex-col gap-[0.75rem] bg-cyan-950 rounded-lg px-[0.9rem] py-[0.9rem]">
@@ -209,6 +329,129 @@ export default function vsOximeter({
                 </button>
 
               </div>
+
+              {
+              // POP UP OF FOR CONFIRMATION VITAL SIGN 10-14-2026
+              showValidationPopup && (
+                <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
+                  <div className="w-full max-w-xl rounded-2xl border-2 border-red-500 bg-cyan-950 p-8 text-center shadow-2xl">
+                    <h3 className="mb-4 text-3xl font-extrabold text-red-400">
+                      Invalid Vital Sign Readings
+                    </h3>
+
+                    <p className="mb-6 text-lg text-cyan-200">
+                      Please enter valid values within the allowed ranges before proceeding.
+                    </p>
+
+                    <div className="mb-6 space-y-3 text-left">
+                      {!isValidSpo2 && (
+                        <div className="rounded-xl border border-red-500 bg-red-950/50 p-4">
+                          <p className="font-bold text-white">SpO₂ (%)</p>
+                          <p className="text-red-300">
+                            {spo2.trim() === ""
+                              ? "Please enter your SpO₂ reading."
+                              : "Enter a valid SpO₂ value between 50 and 100%."}
+                          </p>
+                        </div>
+                      )}
+
+                      {!isValidHeartRate && (
+                        <div className="rounded-xl border border-red-500 bg-red-950/50 p-4">
+                          <p className="font-bold text-white">Heart Rate (bpm)</p>
+                          <p className="text-red-300">
+                            {heartRate.trim() === ""
+                              ? "Please enter your heart rate reading."
+                              : "Enter a valid heart rate between 30 and 250 bpm."}
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowValidationPopup(false);
+                        setActiveField(!isValidSpo2 ? "spo2" : "heartRate");
+                      }}
+                      className="rounded-lg bg-orange-50 px-8 py-3 text-lg font-bold text-cyan-950 hover:bg-orange-100"
+                    >
+                      Correct Values
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {
+              //POP UP OF CONFIRMATION OXYGEN 10-14-2026
+              showConfirmPopup && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-6">
+                  <div className="w-full max-w-xl rounded-2xl border-2 border-cyan-500 bg-cyan-950 p-8 text-center shadow-2xl">
+                    <h3 className="mb-4 text-3xl font-extrabold text-white">
+                      Confirm Oxygen Readings
+                    </h3>
+
+                    <p className="mb-6 text-lg text-cyan-200">
+                      Please verify that these readings match the values displayed on the
+                      pulse oximeter.
+                    </p>
+
+                    <div className="mb-6 grid grid-cols-2 gap-4">
+                      <div className="rounded-xl border border-cyan-600 bg-cyan-900 p-5">
+                        <p className="mb-2 text-sm font-semibold text-cyan-200">
+                          SpO₂
+                        </p>
+                        <p className="text-4xl font-extrabold text-white">
+                          {spo2} <span className="text-lg">%</span>
+                        </p>
+                      </div>
+
+                      <div className="rounded-xl border border-cyan-600 bg-cyan-900 p-5">
+                        <p className="mb-2 text-sm font-semibold text-cyan-200">
+                          HEART RATE
+                        </p>
+                        <p className="text-4xl font-extrabold text-white">
+                          {heartRate} <span className="text-lg">bpm</span>
+                        </p>
+                      </div>
+                    </div>
+
+                    <p className="mb-6 text-base text-yellow-300">
+                      Are these values correct?
+                    </p>
+
+                    <div className="flex flex-col justify-center gap-3 sm:flex-row">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowConfirmPopup(false);
+                          setActiveField("spo2");
+                        }}
+                        className="rounded-lg bg-stone-200 px-6 py-3 text-lg font-bold text-cyan-950 hover:bg-stone-300"
+                      >
+                        Go Back
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowConfirmPopup(false);
+
+                          if (criticalOximeterMessage) {
+                            // Show the emergency alert only after confirmation.
+                            setAlertTriggered(true);
+                            return;
+                          }
+
+                          onProceed?.({ spo2, hr: heartRate });
+                        }}
+                        className="rounded-lg bg-orange-50 px-6 py-3 text-lg font-bold text-cyan-950 hover:bg-orange-100"
+                      >
+                        Yes, Confirm
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
 
             </form>
           </div>

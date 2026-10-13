@@ -55,6 +55,35 @@ export default function KioskHeader({
         </div>
 
         <div className="flex items-center gap-5 min-w-0">
+          {/* BACK BUTTON 10-14-2026 */ }
+        
+          {activeStep > 0 &&
+            activeStep !== 6 &&
+            onNavigateStep && (
+              <button
+                type="button"
+                onClick={() => {
+                  const confirmed = window.confirm(
+                    "Are you sure you want to go back?"
+                  );
+
+                  if (!confirmed) return;
+
+                  if (activeStep === 3 ) {
+                    onNavigateStep(0);
+                  } else {
+                    // All other steps → Previous step
+                    onNavigateStep(activeStep - 1);
+                  }
+                }}
+                className="flex shrink-0 items-center gap-2 rounded-full bg-cyan-950 px-4 py-2 font-extrabold text-yellow-50 transition-all duration-300 hover:bg-cyan-800 active:scale-95 cursor-pointer"
+                aria-label="Go back to previous step"
+              >
+                <span className="text-xl">←</span>
+                <span>Back</span>
+              </button>
+            )}
+
           <ol aria-label="Kiosk progress" className="flex flex-wrap items-center justify-end gap-x-2 gap-y-2 text-sm">
             {STEPS.map((label, index) => {
               const isActive = index === activeStep;
@@ -64,13 +93,12 @@ export default function KioskHeader({
                   {index > 0 && <li aria-hidden className="text-cyan-950/25 font-light select-none">|</li>}
                   <li
                     aria-current={isActive ? "step" : undefined}
-                    className={`flex items-center gap-2 transition-all duration-500 ${
-                      isActive
-                        ? "rounded-full bg-cyan-950 px-3 py-1 font-extrabold text-yellow-50"
-                        : isPast
+                    className={`flex items-center gap-2 transition-all duration-500 ${isActive
+                      ? "rounded-full bg-cyan-950 px-3 py-1 font-extrabold text-yellow-50"
+                      : isPast
                         ? "px-1 font-semibold text-cyan-950"
                         : "px-1 font-semibold text-cyan-950/40"
-                    }`}
+                      }`}
                   >
                     {isPast && onNavigateStep ? (
                       <button
@@ -87,13 +115,12 @@ export default function KioskHeader({
                       <span className="flex items-center gap-1">
                         {[1, 2, 3].map(part => {
                           const state = circleState(part);
-                          const className = `flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold transition-all duration-500 ${
-                            isActive && state !== "future"
-                              ? state === "current"
-                                ? "bg-yellow-400 text-cyan-950 border-yellow-300 ring-2 ring-yellow-200 scale-110"
-                                : "bg-yellow-50 text-cyan-950 border-yellow-50"
-                              : circleClass[state]
-                          }`;
+                          const className = `flex h-6 w-6 items-center justify-center rounded-full border text-xs font-bold transition-all duration-500 ${isActive && state !== "future"
+                            ? state === "current"
+                              ? "bg-yellow-400 text-cyan-950 border-yellow-300 ring-2 ring-yellow-200 scale-110"
+                              : "bg-yellow-50 text-cyan-950 border-yellow-50"
+                            : circleClass[state]
+                            }`;
                           return state === "done" && onNavigateVitalPart ? (
                             <button
                               key={part}
