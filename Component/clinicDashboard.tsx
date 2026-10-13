@@ -1,47 +1,23 @@
 'use client'
 import React, { useState, useEffect } from 'react';
+import { FirebaseError } from "firebase/app";
+import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
+import { auth } from "@/lib/firebase";
+import {
+  getStaffClinic,
+  persistPatientStatuses,
+  subscribeToClinicPatients,
+  type ClinicCode,
+  type PatientCategory as Category,
+  type PatientVitals as Vitals,
+  type QueuePatient as Patient,
+} from "@/lib/patientRecords";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
-type Category = 'URGENT' | 'PRIORITY' | 'REGULAR';
-type ClinicCode = 'SUR' | 'PED' | 'OBG' | 'IM' | 'ER';
-
-interface Vitals {
-  bp: string;     // mmHg, e.g. "120/80"
-  hr: number;     // bpm
-  rr: number;     // breaths/min
-  temp: number;   // °C
-  spo2: number;   // %
-}
-
-interface Complaint {
-  complaint: string;
-  duration: string;            // e.g. "3 days"
-  severity: string | number;   // e.g. "Severe" or 8
-  location: string;            // e.g. "Right lower abdomen"
-}
-
-interface Patient {
-  id: string;
-  ticketCode: string;          // e.g. "SUR-U-001"
-  name: string;
-  age: number;
-  sex: 'M' | 'F';
-  chiefComplaints: Complaint[];
-  vitals?: Vitals | null;
-  category: Category;
-  clinic: ClinicCode;
-  status: 'waiting' | 'serving' | 'done';
-  queueNumber: number;
-  arrivedAt: string;
-  completedAt?: string;        // ISO string, set when finished
-}
 
 interface Clinic {
   code: ClinicCode;
   name: string;
-  staffId: string;
-  staffCode: string;
   color: string;
   isER?: boolean;
 }
@@ -49,11 +25,11 @@ interface Clinic {
 // ─── Clinic Definitions (config, not patient data) ───────────────────────────
 
 const CLINICS: Clinic[] = [
-  { code: 'SUR', name: 'Surgery',           staffId: 'Surgery',    staffCode: '111', color: 'cyan'   },
-  { code: 'PED', name: 'Pediatrics',        staffId: 'Pediatrics', staffCode: '222', color: 'green'  },
-  { code: 'OBG', name: 'OB-GYN',            staffId: 'Obgyne',     staffCode: '333', color: 'pink'   },
-  { code: 'IM',  name: 'Internal Medicine', staffId: 'IM',         staffCode: '555', color: 'blue'   },
-  { code: 'ER',  name: 'Emergency Dept.',   staffId: 'ER',         staffCode: '666', color: 'red', isER: true },
+  { code: 'SUR', name: 'Surgery',           color: 'cyan'   },
+  { code: 'PED', name: 'Pediatrics',        color: 'green'  },
+  { code: 'OBG', name: 'OB-GYN',            color: 'pink'   },
+  { code: 'IM',  name: 'Internal Medicine', color: 'blue'   },
+  { code: 'ER',  name: 'Emergency Dept.',    color: 'red', isER: true },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -529,11 +505,18 @@ function HistoryModal({ clinic, patients, onClose }: { clinic: Clinic; patients:
 
 // ─── Login ────────────────────────────────────────────────────────────────────
 
-function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => string | null }) {
-  const [staffId, setStaffId] = useState('');
-  const [staffCode, setStaffCode] = useState('');
+function ClinicLogin({
+  onLogin,
+  errorMessage,
+}: {
+  onLogin: (email: string, password: string) => Promise<string | null>;
+  errorMessage: string;
+}) {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [showCode, setShowCode] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const [time, setTime] = useState(now());
 
   useEffect(() => {
@@ -541,10 +524,16 @@ function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => strin
     return () => clearInterval(t);
   }, []);
 
-  function handleSubmit() {
+  async function handleSubmit() {
+    if (isSubmitting) return;
     setError('');
-    const err = onLogin(staffId.trim(), staffCode.trim());
-    if (err) setError(err);
+    setIsSubmitting(true);
+    try {
+      const err = await onLogin(email.trim(), password);
+      if (err) setError(err);
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -563,12 +552,13 @@ function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => strin
         <p className="text-slate-500 text-xs mb-6">Enter your credentials to access your clinic dashboard.</p>
 
         <div className="mb-4">
-          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Staff ID</label>
+          <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-2">Staff Email</label>
           <input
-            type="text"
-            value={staffId}
-            onChange={e => { setStaffId(e.target.value); setError(''); }}
-            placeholder="e.g. NMMC-SUR-047"
+            type="email"
+            autoComplete="username"
+            value={email}
+            onChange={e => { setEmail(e.target.value); setError(''); }}
+            placeholder="name@hospital.org"
             className="w-full rounded-xl bg-slate-700 border border-slate-600 text-white placeholder-slate-500 px-4 py-3 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
           />
         </div>
@@ -578,10 +568,11 @@ function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => strin
           <div className="relative">
             <input
               type={showCode ? 'text' : 'password'}
-              value={staffCode}
-              onChange={e => { setStaffCode(e.target.value); setError(''); }}
-              onKeyDown={e => e.key === 'Enter' && handleSubmit()}
-              placeholder="Enter access code"
+              autoComplete="current-password"
+              value={password}
+              onChange={e => { setPassword(e.target.value); setError(''); }}
+              onKeyDown={e => { if (e.key === 'Enter') void handleSubmit(); }}
+              placeholder="Enter password"
               className="w-full rounded-xl bg-slate-700 border border-slate-600 text-white placeholder-slate-500 px-4 py-3 pr-16 text-sm focus:outline-none focus:border-cyan-500 transition-colors"
             />
             <button
@@ -594,17 +585,18 @@ function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => strin
           </div>
         </div>
 
-        {error && (
+        {(error || errorMessage) && (
           <div className="mb-4 rounded-xl bg-red-900/40 border border-red-700 px-4 py-3 text-sm text-red-300 flex items-center gap-2">
-            <span>⚠</span> {error}
+            <span>⚠</span> {error || errorMessage}
           </div>
         )}
 
         <button
-          onClick={handleSubmit}
+          onClick={() => { void handleSubmit(); }}
+          disabled={isSubmitting || !email.trim() || !password}
           className="w-full rounded-xl bg-cyan-600 hover:bg-cyan-500 active:bg-cyan-700 text-white font-bold py-3 transition-colors"
         >
-          Access Dashboard →
+          {isSubmitting ? "Signing in…" : "Access Dashboard →"}
         </button>
       </div>
     </div>
@@ -613,44 +605,130 @@ function ClinicLogin({ onLogin }: { onLogin: (id: string, code: string) => strin
 
 // ─── Root ─────────────────────────────────────────────────────────────────────
 
-interface ClinicDashboardProps {
-  onBack: () => void;
-  /** Live patient data coming in (from your API / socket / Supabase / etc.) */
-  patients?: Patient[];
-  /** Called whenever the dashboard changes patient status (finish / call again) */
-  onPatientsChange?: (patients: Patient[]) => void;
-}
-
-export default function ClinicDashboard({ onBack, patients: incoming, onPatientsChange }: ClinicDashboardProps) {
-  const [patients, setPatients] = useState<Patient[]>(() => promoteAll(incoming ?? []));
+export default function ClinicDashboard() {
+  const [patientState, setPatientState] = useState<{ clinic: ClinicCode; patients: Patient[] } | null>(null);
   const [activeClinic, setActiveClinic] = useState<Clinic | null>(null);
   const [showCompleted, setShowCompleted] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  const [authReady, setAuthReady] = useState(false);
+  const [loginError, setLoginError] = useState("");
+  const [patientError, setPatientError] = useState("");
+  const [loadingPatients, setLoadingPatients] = useState(false);
+  const patients = patientState && activeClinic?.code === patientState.clinic ? patientState.patients : [];
 
-  // Sync whenever new data arrives from outside
   useEffect(() => {
-    if (incoming) setPatients(promoteAll(incoming));
-  }, [incoming]);
+    let mounted = true;
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      user => {
+        if (!user) {
+          if (mounted) {
+            setActiveClinic(null);
+            setLoadingPatients(false);
+            setAuthReady(true);
+          }
+          return;
+        }
 
-  // Apply a change, auto-promote the next patient, and report it upstream
-  function commit(next: Patient[]) {
+        void getStaffClinic(user.uid)
+          .then(code => {
+            if (!mounted) return;
+            setActiveClinic(CLINICS.find(clinic => clinic.code === code) ?? null);
+            setLoadingPatients(true);
+            setPatientError("");
+            setLoginError("");
+            setAuthReady(true);
+          })
+          .catch(async error => {
+            if (!mounted) return;
+            setActiveClinic(null);
+            setLoadingPatients(false);
+            setLoginError(error instanceof Error ? error.message : "Could not verify staff access.");
+            setAuthReady(true);
+            await signOut(auth);
+          });
+      },
+      error => {
+        if (!mounted) return;
+        setLoadingPatients(false);
+        setLoginError(error.message);
+        setAuthReady(true);
+      },
+    );
+    return () => {
+      mounted = false;
+      unsubscribe();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!activeClinic) return;
+    return subscribeToClinicPatients(
+      activeClinic.code,
+      records => {
+        const promoted = promoteAll(records);
+        setPatientState({ clinic: activeClinic.code, patients: promoted });
+        setPatientError("");
+        setLoadingPatients(false);
+        if (records.some((patient, index) => patient.status !== promoted[index]?.status)) {
+          void persistPatientStatuses(records, promoted).catch(error => {
+            setPatientError(error instanceof Error ? error.message : "Could not update the clinic queue.");
+          });
+        }
+      },
+      error => {
+        setPatientError(error.message);
+        setLoadingPatients(false);
+      },
+    );
+  }, [activeClinic]);
+
+  async function commit(next: Patient[]) {
     const promoted = promoteAll(next);
-    setPatients(promoted);
-    onPatientsChange?.(promoted);
+    try {
+      await persistPatientStatuses(patients, promoted);
+      if (activeClinic) setPatientState({ clinic: activeClinic.code, patients: promoted });
+      setPatientError("");
+    } catch (error) {
+      setPatientError(error instanceof Error ? error.message : "Could not update the queue.");
+    }
   }
 
-  function handleLogin(id: string, code: string): string | null {
-    const clinic = CLINICS.find(c => c.staffId === id);
-    if (!clinic) return 'Staff ID not found.';
-    if (code !== clinic.staffCode) return 'Incorrect access code.';
-    setActiveClinic(clinic);
-    return null;
+  async function handleLogin(email: string, password: string): Promise<string | null> {
+    setLoginError("");
+    try {
+      const credential = await signInWithEmailAndPassword(auth, email, password);
+      const clinicCode = await getStaffClinic(credential.user.uid);
+      const clinic = CLINICS.find(item => item.code === clinicCode);
+      if (!clinic) throw new Error("This staff account has an invalid clinic assignment.");
+      setLoadingPatients(true);
+      setPatientError("");
+      setActiveClinic(clinic);
+      return null;
+    } catch (error) {
+      if (auth.currentUser) await signOut(auth);
+      const message = error instanceof FirebaseError
+        ? error.code === "auth/invalid-credential" || error.code === "auth/user-not-found" || error.code === "auth/wrong-password"
+          ? "Email or password is incorrect."
+          : error.message
+        : error instanceof Error
+        ? error.message
+        : "Could not sign in to the clinic dashboard.";
+      setLoginError(message);
+      return message;
+    }
   }
 
-  function handleLogout() {
+  async function handleLogout() {
     setShowCompleted(false);
     setShowHistory(false);
     setActiveClinic(null);
+    setLoadingPatients(false);
+    try {
+      await signOut(auth);
+    } catch (error) {
+      setLoginError(error instanceof Error ? error.message : "Could not sign out of the clinic dashboard.");
+    }
   }
 
   // Call a completed patient again: they become "serving";
@@ -666,7 +744,10 @@ export default function ClinicDashboard({ onBack, patients: incoming, onPatients
     setShowCompleted(false);
   }
 
-  if (!activeClinic) return <ClinicLogin onLogin={handleLogin} />;
+  if (!authReady) {
+    return <div className="min-h-screen bg-slate-900 p-8 text-center text-slate-300">Checking staff sign-in…</div>;
+  }
+  if (!activeClinic) return <ClinicLogin onLogin={handleLogin} errorMessage={loginError} />;
 
   const completed = patients
     .filter(p => p.clinic === activeClinic.code && p.status === 'done')
@@ -687,6 +768,17 @@ export default function ClinicDashboard({ onBack, patients: incoming, onPatients
           </div>
         </div>
 
+        {loginError && (
+          <p role="alert" className="mb-4 rounded-xl border border-red-700 bg-red-950/50 px-4 py-3 text-sm text-red-200">
+            {loginError}
+          </p>
+        )}
+        {patientError && (
+          <p role="alert" className="mb-4 rounded-xl border border-red-700 bg-red-950/50 px-4 py-3 text-sm text-red-200">
+            Live patient data error: {patientError}
+          </p>
+        )}
+        {loadingPatients && <p className="mb-4 text-sm text-cyan-300">Loading live clinic queue…</p>}
         <ClinicQueue clinic={activeClinic} allPatients={patients} onUpdate={commit} />
       </div>
 

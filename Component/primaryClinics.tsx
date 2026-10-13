@@ -729,7 +729,7 @@ function StepSeverity({
 
 interface PrimaryClinicsProps {
   onLogout?: () => void;
-  onProceed?: (payload: PrimaryClinicsPayload) => void;
+  onProceed?: (payload: PrimaryClinicsPayload) => void | Promise<void>;
   onNavigateStep?: (step: number) => void;
   onNavigateVitalPart?: (part: number) => void;
 }
@@ -749,6 +749,8 @@ export default function PrimaryClinics({
   const [extras, setExtras] = useState<Record<string, string>>({});
   const [painLocations, setPainLocations] = useState<string[]>([]);
   const [severity, setSeverity] = useState<number | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [submissionError, setSubmissionError] = useState("");
 
   const steps = stepsFor(complaint);
   const stepIdx = steps.indexOf(stepKey);
@@ -826,7 +828,7 @@ export default function PrimaryClinics({
 
   const durationText = formatDuration(durationValue, durationUnit);
 
-  const handleProceed = () => {
+  const handleProceed = async () => {
     if (!category || !complaint || severity === null || durationUnit === "") return;
     const sev = SEVERITY.find((s) => s.value === severity)!;
 
@@ -862,7 +864,15 @@ export default function PrimaryClinics({
 
     console.log("BICA Payload → ML Model:", JSON.stringify(payload, null, 2));
     if (onProceed) {
-      onProceed(payload);
+      setIsSubmitting(true);
+      setSubmissionError("");
+      try {
+        await onProceed(payload);
+      } catch (error) {
+        setSubmissionError(error instanceof Error ? error.message : "Could not save the patient record.");
+      } finally {
+        setIsSubmitting(false);
+      }
     } else {
       alert(`Routing to: ${payload.clinic}\n${payload.summary_text}`);
     }
@@ -927,17 +937,22 @@ export default function PrimaryClinics({
             />
 
             <div className="mt-4 flex flex-col gap-2">
+              {submissionError && (
+                <p role="alert" className="rounded-lg border border-red-700 bg-red-950/60 px-3 py-2 text-sm text-red-200">
+                  {submissionError}
+                </p>
+              )}
               {(stepKey === "details" || stepKey === "pain" || stepKey === "severity") && (
                 <button
                   type="button"
-                  disabled={!canContinue}
+                  disabled={!canContinue || isSubmitting}
                   onClick={handleContinue}
                   className={`rounded-xl px-5 py-3 text-base font-bold transition-all
-                    ${canContinue
+                    ${canContinue && !isSubmitting
                       ? "cursor-pointer bg-orange-50 text-cyan-950 hover:bg-orange-100"
                       : "cursor-not-allowed bg-cyan-800 text-cyan-500"}`}
                 >
-                  {stepKey === "severity" ? "Proceed →" : "Continue →"}
+                  {isSubmitting ? "Saving patient…" : stepKey === "severity" ? "Proceed →" : "Continue →"}
                 </button>
               )}
 

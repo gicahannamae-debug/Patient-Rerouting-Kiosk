@@ -1,0 +1,189 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Assumed model:
+    // patients/{patientId}: server-created ticket and minimum kiosk data.
+    // PII and clinical fields are visible only to active staff assigned to the
+    // same clinic. Kiosk clients can create a validated waiting record only.
+    // queueCounters/{clinicCode}: public allocation metadata plus the ID of the
+    // patient created in the same transaction for each queue number.
+    // staff/{authUid}: console-provisioned {active: bool, clinic: ClinicCode}.
+
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function staffPath(uid) {
+      return /databases/$(database)/documents/staff/$(uid);
+    }
+
+    function validClinic(clinic) {
+      return clinic in ['SUR', 'PED', 'OBG', 'IM', 'ER'];
+    }
+
+    function isStaffForClinic(clinic) {
+      return isAuthenticated()
+        && exists(staffPath(request.auth.uid))
+        && get(staffPath(request.auth.uid)).data.keys().hasAll(['active', 'clinic'])
+        && get(staffPath(request.auth.uid)).data.keys().hasOnly(['active', 'clinic'])
+        && get(staffPath(request.auth.uid)).data.active == true
+        && get(staffPath(request.auth.uid)).data.clinic == clinic
+        && validClinic(get(staffPath(request.auth.uid)).data.clinic);
+    }
+
+    function validComplaint(complaint) {
+      return complaint is map
+        && complaint.keys().hasAll(['complaint', 'duration', 'severity', 'location'])
+        && complaint.keys().hasOnly(['complaint', 'duration', 'severity', 'location'])
+        && complaint.complaint is string
+        && complaint.complaint.size() > 0
+        && complaint.complaint.size() <= 180
+        && complaint.duration is string
+        && complaint.duration.size() > 0
+        && complaint.duration.size() <= 80
+        && complaint.severity is string
+        && complaint.severity.size() > 0
+        && complaint.severity.size() <= 40
+        && complaint.location is string
+        && complaint.location.size() <= 500;
+    }
+
+    function validVitals(vitals) {
+      return vitals is map
+        && vitals.keys().hasAll(['bp', 'hr', 'rr', 'temp', 'spo2'])
+        && vitals.keys().hasOnly(['bp', 'hr', 'rr', 'temp', 'spo2'])
+        && (vitals.bp == null
+          || (vitals.bp is string
+            && vitals.bp.size() <= 8
+            && vitals.bp.matches('^[0-9]{2,3}/[0-9]{2,3}$')))
+        && (vitals.hr == null || (vitals.hr is number && vitals.hr >= 30 && vitals.hr <= 250))
+        && vitals.rr == null
+        && (vitals.temp == null || (vitals.temp is number && vitals.temp >= 30 && vitals.temp <= 45))
+        && (vitals.spo2 == null || (vitals.spo2 is number && vitals.spo2 >= 50 && vitals.spo2 <= 100));
+    }
+
+    function validPatient(data) {
+      return data.keys().hasAll([
+          'ticketCode', 'name', 'age', 'sex', 'chiefComplaints', 'vitals',
+          'category', 'clinic', 'status', 'queueNumber', 'createdAt', 'completedAt'
+        ])
+        && data.keys().hasOnly([
+          'ticketCode', 'name', 'age', 'sex', 'chiefComplaints', 'vitals',
+          'category', 'clinic', 'status', 'queueNumber', 'createdAt', 'completedAt'
+        ])
+        && data.ticketCode is string
+        && data.ticketCode.size() <= 20
+        && validClinic(data.clinic)
+        && data.ticketCode.matches('^' + data.clinic + '-R-[0-9]{3,6}$')
+        && data.name is string
+        && data.name.size() > 0
+        && data.name.size() <= 160
+        && data.age is int
+        && data.age >= 0
+        && data.age <= 150
+        && data.sex in ['M', 'F']
+        && data.chiefComplaints is list
+        && data.chiefComplaints.size() == 1
+        && validComplaint(data.chiefComplaints[0])
+        && validVitals(data.vitals)
+        && data.category == 'REGULAR'
+        && data.status in ['waiting', 'serving', 'done']
+        && data.queueNumber is int
+        && data.queueNumber >= 1
+        && data.queueNumber <= 999999
+        && data.createdAt is timestamp
+        && (data.completedAt == null || data.completedAt is timestamp);
+    }
+
+    function isValidQueueCounter(data, clinic) {
+      return data.keys().hasAll(['clinic', 'current', 'lastPatientId', 'updatedAt'])
+        && data.keys().hasOnly(['clinic', 'current', 'lastPatientId', 'updatedAt'])
+        && data.clinic == clinic
+        && validClinic(data.clinic)
+        && data.current is int
+        && data.current >= 1
+        && data.current <= 999999
+        && data.lastPatientId is string
+        && data.lastPatientId.size() > 0
+        && data.lastPatientId.size() <= 128
+        && data.updatedAt is timestamp
+        && data.updatedAt == request.time;
+    }
+
+    function hasValidQueueAllocation(data, patientId) {
+      let counter = /databases/$(database)/documents/queueCounters/$(data.clinic);
+      return existsAfter(counter)
+        && getAfter(counter).data.current == data.queueNumber
+        && getAfter(counter).data.lastPatientId == patientId
+        && (exists(counter)
+          ? get(counter).data.current + 1 == data.queueNumber
+          : data.queueNumber == 1);
+    }
+
+    function hasPatientForQueueCounter(data) {
+      let patient = /databases/$(database)/documents/patients/$(data.lastPatientId);
+      return existsAfter(patient)
+        && getAfter(patient).data.clinic == data.clinic
+        && getAfter(patient).data.queueNumber == data.current;
+    }
+
+    function validStatusTransition() {
+      let oldStatus = resource.data.status;
+      let newStatus = request.resource.data.status;
+      let completion = request.resource.data.completedAt;
+      return (oldStatus == 'waiting' && newStatus == 'serving' && completion == null)
+        || (oldStatus == 'serving' && newStatus == 'waiting' && completion == null)
+        || (oldStatus == 'serving' && newStatus == 'done'
+          && completion is timestamp && completion == request.time)
+        || (oldStatus == 'done' && newStatus == 'serving' && completion == null);
+    }
+
+    match /patients/{patientId} {
+      allow get, list: if isStaffForClinic(resource.data.clinic);
+      allow create: if validPatient(request.resource.data)
+        && request.resource.data.status == 'waiting'
+        && request.resource.data.completedAt == null
+        && request.resource.data.createdAt == request.time
+        && hasValidQueueAllocation(request.resource.data, patientId)
+        && (request.auth == null || isStaffForClinic(request.resource.data.clinic));
+      allow update: if isStaffForClinic(resource.data.clinic)
+        && request.resource.data.clinic == resource.data.clinic
+        && validPatient(request.resource.data)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completedAt'])
+        && validStatusTransition();
+      allow delete: if false;
+    }
+
+    match /queueCounters/{clinic} {
+      allow get: if validClinic(clinic);
+      allow list, delete: if false;
+      allow create: if validClinic(clinic)
+        && isValidQueueCounter(request.resource.data, clinic)
+        && request.resource.data.current == 1
+        && hasPatientForQueueCounter(request.resource.data);
+      allow update: if validClinic(clinic)
+        && isValidQueueCounter(request.resource.data, clinic)
+        && request.resource.data.clinic == resource.data.clinic
+        && request.resource.data.current == resource.data.current + 1
+        && request.resource.data.lastPatientId != resource.data.lastPatientId
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['current', 'lastPatientId', 'updatedAt'])
+        && hasPatientForQueueCounter(request.resource.data);
+    }
+
+    match /staff/{uid} {
+      allow get: if isAuthenticated()
+        && request.auth.uid == uid
+        && resource.data.keys().hasAll(['active', 'clinic'])
+        && resource.data.keys().hasOnly(['active', 'clinic'])
+        && resource.data.active is bool
+        && validClinic(resource.data.clinic);
+      allow list, create, update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

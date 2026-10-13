@@ -68,6 +68,7 @@ export default function PatientInformation({ onLogout, onProceed, onNavigateStep
               <input
                 name="lastName"
                 type="text"
+                required
                 placeholder="e.g. Gica"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
@@ -78,6 +79,7 @@ export default function PatientInformation({ onLogout, onProceed, onNavigateStep
               <input
                 name="firstName"
                 type="text"
+                required
                 placeholder="e.g. Hanna Mae"
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               />
@@ -124,6 +126,7 @@ export default function PatientInformation({ onLogout, onProceed, onNavigateStep
               <input
                 name="age"
                 type="number"
+                required
                 placeholder="0"
                 min="0"
                 max="150"
@@ -135,6 +138,7 @@ export default function PatientInformation({ onLogout, onProceed, onNavigateStep
               <label className="text-[1.1rem] font-semibold text-white">Sex</label>
               <select
                 name="gender"
+                required
                 className="text-[1rem] text-cyan-950 border border-stone-300 bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none focus:ring-2 focus:ring-orange-300"
               >
                 <option value="">— select —</option>
