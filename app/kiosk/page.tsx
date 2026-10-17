@@ -1,5 +1,5 @@
 'use client'
-import { useState } from "react";
+import { useRef, useState } from "react";
 import CcRedflag, { type EmergencyAlert } from "@/Component/ccRedflag";
 import PatientInformation from "@/Component/patientInformation";
 import PrimaryClinics, { type ClinicOption, type PrimaryClinicsPayload } from "@/Component/primaryClinics";
@@ -9,8 +9,12 @@ import VsOximeter from "@/Component/vsOximeter";
 import SummaryScreen from "@/Component/summaryScreen";
 import type { TicketMetadata } from "@/Component/summaryTypes";
 import { createQueuePatient } from "@/lib/patientRecords";
+import { calculateNEWS2 } from "@/lib/news2";
+import type { NEWS2Result } from "@/lib/news2";
+import type { KioskLanguage } from "@/lib/kioskLanguage";
+import type { PatientAgeGroup, PatientDemographics } from "@/lib/patientDemographics";
 
-// Flow (new patients only): safety → patientForm → vitals (bp → oximetry → temperature) → primaryClinics → summary
+// Flow: early patient details → safety → vitals → registration → complaints → ticket
 type AppStep = "safety" | "patientForm" | "vitals" | "primaryClinics" | "summary";
 type VitalStage = "bp" | "oximetry" | "temperature";
 
@@ -21,7 +25,10 @@ type PatientInfo = {
   pwdStatus: string;
   birthdate: string;
   age: string;
+  ageDisplay: string;
+  ageGroup: PatientAgeGroup | "";
   gender: string;
+  contactNumber: string;
   address: string;
   birthplace: string;
   religion: string;
@@ -33,6 +40,7 @@ type VitalData = {
   bpSys: string;
   bpDia: string;
   hr: string;
+  rr: string;
   spo2: string;
   temperature: string;
 };
@@ -40,6 +48,7 @@ type VitalData = {
 type TriageSelection = {
   groupLabel: string;
   ccLabel: string;
+  ccLabelCebuano: string;
   subLabel: string;
   clinic: ClinicOption | null;
   systemValue: string;
@@ -50,11 +59,12 @@ type VitalPayload = Partial<VitalData>;
 
 const EMPTY_PATIENT: PatientInfo = {
   lastName: "", firstName: "", middleName: "", pwdStatus: "", birthdate: "", age: "",
-  gender: "", address: "", birthplace: "", religion: "", civilStatus: "", appointmentStatus: "",
+  ageDisplay: "", ageGroup: "", gender: "", contactNumber: "", address: "", birthplace: "",
+  religion: "", civilStatus: "", appointmentStatus: "",
 };
-const EMPTY_VITALS: VitalData = { bpSys: "", bpDia: "", hr: "", spo2: "", temperature: "" };
+const EMPTY_VITALS: VitalData = { bpSys: "", bpDia: "", hr: "", rr: "", spo2: "", temperature: "" };
 const EMPTY_TRIAGE: TriageSelection = {
-  groupLabel: "", ccLabel: "", subLabel: "", clinic: null, systemValue: "", answers: {},
+  groupLabel: "", ccLabel: "", ccLabelCebuano: "", subLabel: "", clinic: null, systemValue: "", answers: {},
 };
 
 // Only consultation tickets exist now
@@ -64,11 +74,12 @@ const TICKET_METADATA: TicketMetadata = {
   badgeColor: "bg-cyan-600 text-white",
 };
 
-const clinicDestinations: Record<ClinicOption, string> = {
+const clinicDestinations: Record<ClinicOption | "Emergency Dept.", string> = {
   "General Surgery": "Surgical Services Wing",
   "Internal Medicine": "Internal Medicine Unit",
   "OB-GYNE": "OB-GYNE Clinic",
   Pediatrics: "Pediatrics Wing",
+  "Emergency Dept.": "Emergency Department",
 };
 
 const getCurrentDate = () => new Date().toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" });
@@ -80,27 +91,34 @@ const readMeasurement = (value: string, min: number, max: number) => {
 
 export default function Home() {
   const [step, setStep] = useState<AppStep>("safety");
+  const [language, setLanguage] = useState<KioskLanguage>("en");
 
-  const [selectedClinic, setSelectedClinic] = useState<ClinicOption | null>(null);
+  const [selectedClinic, setSelectedClinic] = useState<ClinicOption | "Emergency Dept." | null>(null);
   const [vitalStage, setVitalStage] = useState<VitalStage>("bp");
   const [patientInfo, setPatientInfo] = useState<PatientInfo>(EMPTY_PATIENT);
   const [vitals, setVitals] = useState<VitalData>(EMPTY_VITALS);
+  const [news2, setNews2] = useState<NEWS2Result | null>(null);
   const [triageSelection, setTriageSelection] = useState<TriageSelection>(EMPTY_TRIAGE);
   const [queueCode, setQueueCode] = useState("");
   const [destination, setDestination] = useState("");
   const [date, setDate] = useState(getCurrentDate());
   const [time, setTime] = useState(getCurrentTime());
+  const [queueError, setQueueError] = useState("");
+  const emergencyQueueCreation = useRef(false);
 
   const resetFormState = () => {
+    setLanguage("en");
     setSelectedClinic(null);
     setVitalStage("bp");
     setPatientInfo(EMPTY_PATIENT);
     setVitals(EMPTY_VITALS);
+    setNews2(null);
     setTriageSelection(EMPTY_TRIAGE);
     setQueueCode("");
     setDestination("");
     setDate(getCurrentDate());
     setTime(getCurrentTime());
+    setQueueError("");
   };
 
   const handleKioskLogout = () => {
@@ -109,8 +127,24 @@ export default function Home() {
     setStep("safety");
   };
 
-  // ── Safety check ────────────────────────────────────────────────────────────
-  const handleSafetyProceed = () => setStep("patientForm"); // "NONE apply" → straight to triage form
+  // ── Patient details and safety check ────────────────────────────────────────
+  const handlePatientDemographics = (demographics: PatientDemographics) => {
+    setPatientInfo(previous => ({
+      ...previous,
+      firstName: demographics.firstName,
+      lastName: demographics.lastName,
+      age: String(demographics.age),
+      ageDisplay: demographics.ageDisplay,
+      ageGroup: demographics.ageGroup,
+      gender: demographics.gender,
+      contactNumber: demographics.contactNumber,
+    }));
+  };
+
+  const handleSafetyProceed = () => {
+    setVitalStage("bp");
+    setStep("vitals");
+  };
 
   const handleEmergencyAlert = (alert: EmergencyAlert) => {
     // TODO: write to Firestore so the ER dashboard updates in realtime, e.g.
@@ -118,24 +152,126 @@ export default function Home() {
     console.log("Emergency alert:", alert);
   };
 
-  // ── Triage form ─────────────────────────────────────────────────────────────
+  // ── Registration form (after vital signs) ───────────────────────────────────
   const handlePatientFormProceed = (values?: PatientInfo) => {
-    if (values) setPatientInfo(values);
-    setVitalStage("bp");
-    setStep("vitals");
+    if (values) {
+      setPatientInfo(previous => ({
+        ...values,
+        age: previous.age || values.age,
+        ageDisplay: previous.ageDisplay || values.age,
+        ageGroup: previous.ageGroup,
+        contactNumber: previous.contactNumber,
+      }));
+    }
+    setStep("primaryClinics");
+  };
+
+  const calculateCurrentNEWS2 = (data: VitalData) => calculateNEWS2({
+    respiratoryRate: readMeasurement(data.rr, 0, 100),
+    oxygenSaturation: readMeasurement(data.spo2, 0, 100),
+    systolicBloodPressure: readMeasurement(data.bpSys, 0, 300),
+    pulseRate: readMeasurement(data.hr, 0, 250),
+    temperature: readMeasurement(data.temperature, 30, 45),
+    priorityPatient: patientInfo.pwdStatus === "Yes, PWD" || patientInfo.ageGroup === "SENIOR",
+  });
+
+  const createQueueTicket = async (result: NEWS2Result, data: VitalData, payload?: PrimaryClinicsPayload) => {
+    const route = result.route;
+    const clinic = route === "EMERGENCY" ? "Emergency Dept." : payload?.clinic;
+    if (!clinic) throw new Error("Select a clinic before creating the patient ticket.");
+
+    const name = [patientInfo.firstName, patientInfo.middleName, patientInfo.lastName]
+      .map(value => value.trim())
+      .filter(Boolean)
+      .join(" ");
+    if (!name || !patientInfo.ageGroup || !patientInfo.ageDisplay || !patientInfo.contactNumber || !patientInfo.gender) {
+      throw new Error("Patient details are incomplete. Please return to Patient Details before creating a ticket.");
+    }
+    const ticket = await createQueuePatient({
+      clinic,
+      name,
+      age: Number(patientInfo.age),
+      ageDisplay: patientInfo.ageDisplay,
+      ageGroup: patientInfo.ageGroup,
+      sex: patientInfo.gender === "MALE" ? "M" : "F",
+      contactNumber: patientInfo.contactNumber,
+      category: route,
+      news2: result,
+      complaint: payload
+        ? {
+            complaint: payload.cc_label,
+            duration: payload.duration_text,
+            severity: payload.severity_label,
+            location: payload.pain_locations.join(", "),
+          }
+        : {
+            complaint: "NEWS2 emergency escalation",
+            duration: "At assessment",
+            severity: "Emergency",
+            location: result.criticalParameters.join(", ") || "NEWS2 total 7 or higher",
+          },
+      vitals: {
+        bp: data.bpSys && data.bpDia ? `${data.bpSys}/${data.bpDia}` : null,
+        hr: readMeasurement(data.hr, 30, 250),
+        rr: readMeasurement(data.rr, 0, 100),
+        temp: readMeasurement(data.temperature, 30, 45),
+        spo2: readMeasurement(data.spo2, 0, 100),
+      },
+    });
+
+    const arrivedAt = new Date(ticket.arrivedAt);
+    setNews2(result);
+    setSelectedClinic(clinic);
+    setDestination(clinicDestinations[clinic]);
+    setQueueCode(ticket.ticketCode);
+    setTriageSelection(payload ? {
+      groupLabel: payload.group_label,
+      ccLabel: payload.cc_label,
+      ccLabelCebuano: payload.cc_label_cebuano,
+      subLabel: payload.sub_label,
+      clinic: payload.clinic,
+      systemValue: payload.system_value,
+      answers: payload.answers,
+    } : {
+      ...EMPTY_TRIAGE,
+      groupLabel: "NEWS2 emergency escalation",
+      ccLabel: "NEWS2 emergency escalation",
+      subLabel: "NEWS2 emergency escalation",
+    });
+    setDate(arrivedAt.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }));
+    setTime(arrivedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
+    setQueueError("");
+    setStep("summary");
   };
 
   // ── Vitals ──────────────────────────────────────────────────────────────────
   const handleVitalProceed = (values?: VitalPayload) => {
+    const updatedVitals = values ? { ...vitals, ...values } : vitals;
     if (values) {
-      setVitals((prev) => ({ ...prev, ...values }));
+      setVitals(updatedVitals);
     }
     if (vitalStage === "bp") {
       setVitalStage("oximetry");
     } else if (vitalStage === "oximetry") {
       setVitalStage("temperature");
     } else {
-      setStep("primaryClinics");
+      const result = calculateCurrentNEWS2(updatedVitals);
+      setNews2(result);
+      if (result.route === "EMERGENCY") {
+        if (!emergencyQueueCreation.current) {
+          emergencyQueueCreation.current = true;
+          setQueueError("");
+          void createQueueTicket(result, updatedVitals)
+            .catch(error => {
+              setQueueError(error instanceof Error ? error.message : "Could not create the emergency queue ticket.");
+            })
+            .finally(() => {
+              emergencyQueueCreation.current = false;
+            });
+        }
+      } else {
+        setStep("patientForm");
+      }
     }
   };
 
@@ -149,6 +285,8 @@ export default function Home() {
       setVitalStage("temperature");
       setStep("vitals");
     } else if (targetStep === 5) {
+      setStep("patientForm");
+    } else if (targetStep === 6) {
       setStep("primaryClinics");
     }
   };
@@ -159,45 +297,8 @@ export default function Home() {
   };
 
   const handlePrimaryClinicsProceed = async (payload: PrimaryClinicsPayload) => {
-    const clinic = payload.clinic;
-    const name = [patientInfo.firstName, patientInfo.middleName, patientInfo.lastName]
-      .map(value => value.trim())
-      .filter(Boolean)
-      .join(" ");
-    const ticket = await createQueuePatient({
-      clinic,
-      name,
-      age: Number(patientInfo.age),
-      sex: patientInfo.gender === "Male" ? "M" : "F",
-      complaint: {
-        complaint: payload.cc_label,
-        duration: payload.duration_text,
-        severity: payload.severity_label,
-        location: payload.pain_locations.join(", "),
-      },
-      vitals: {
-        bp: vitals.bpSys && vitals.bpDia ? `${vitals.bpSys}/${vitals.bpDia}` : null,
-        hr: readMeasurement(vitals.hr, 30, 250),
-        rr: null,
-        temp: readMeasurement(vitals.temperature, 30, 45),
-        spo2: readMeasurement(vitals.spo2, 50, 100),
-      },
-    });
-    const arrivedAt = new Date(ticket.arrivedAt);
-    setSelectedClinic(clinic);
-    setDestination(clinicDestinations[clinic]);
-    setQueueCode(ticket.ticketCode);
-    setTriageSelection({
-      groupLabel: payload.group_label,
-      ccLabel: payload.cc_label,
-      subLabel: payload.sub_label,
-      clinic,
-      systemValue: payload.system_value,
-      answers: payload.answers,
-    });
-    setDate(arrivedAt.toLocaleDateString("en-US", { month: "2-digit", day: "2-digit", year: "numeric" }));
-    setTime(arrivedAt.toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit" }));
-    setStep("summary");
+    const result = calculateCurrentNEWS2(vitals);
+    await createQueueTicket(result, vitals, payload);
   };
 
   const handleFinish = () => {
@@ -205,19 +306,31 @@ export default function Home() {
     setStep("safety");
   };
 
-  const patientName = `${patientInfo.lastName}, ${patientInfo.firstName} ${patientInfo.middleName}`.trim();
-  const complaints = triageSelection.subLabel || triageSelection.ccLabel || triageSelection.groupLabel || "No chief complaint selected";
+  const patientName = [patientInfo.firstName, patientInfo.middleName, patientInfo.lastName]
+    .filter(Boolean)
+    .join(" ");
+  const complaints = language === "ceb"
+    ? triageSelection.ccLabelCebuano || "Wala pay napili nga pangunang reklamo"
+    : triageSelection.subLabel || triageSelection.ccLabel || triageSelection.groupLabel || "No chief complaint selected";
   const clinic = selectedClinic ?? triageSelection.clinic ?? "";
 
   return (
     <div
       className="min-h-screen w-full relative"
     >
+      {queueError && (
+        <div role="alert" className="fixed inset-x-4 top-4 z-50 mx-auto max-w-2xl rounded-xl border border-red-400 bg-red-950 p-4 text-center font-semibold text-white shadow-xl">
+          {queueError} Please ask staff for help before continuing.
+        </div>
+      )}
       <div className="relative">
         {step === "safety" && (
               <CcRedflag
+                language={language}
+                onLanguageChange={setLanguage}
                 onLogout={handleKioskLogout}
                 onProceed={handleSafetyProceed}
+                onPatientDemographics={handlePatientDemographics}
                 onNavigateStep={handleNavigateStep}
                 onEmergencyAlert={handleEmergencyAlert}
               />
@@ -225,7 +338,9 @@ export default function Home() {
 
             {step === "patientForm" && (
               <PatientInformation
+                language={language}
                 onLogout={handleKioskLogout}
+                initialValues={patientInfo}
                 onProceed={handlePatientFormProceed}
                 onNavigateStep={handleNavigateStep}
               />
@@ -233,6 +348,7 @@ export default function Home() {
 
             {step === "vitals" && vitalStage === "bp" && (
               <VsBloodpressure
+                language={language}
                 onLogout={handleKioskLogout}
                 onProceed={handleVitalProceed}
                 onNavigateStep={handleNavigateStep}
@@ -241,6 +357,7 @@ export default function Home() {
             )}
             {step === "vitals" && vitalStage === "oximetry" && (
               <VsOximeter
+                language={language}
                 onLogout={handleKioskLogout}
                 onProceed={handleVitalProceed}
                 onNavigateStep={handleNavigateStep}
@@ -249,6 +366,7 @@ export default function Home() {
             )}
             {step === "vitals" && vitalStage === "temperature" && (
               <VsTemperature
+                language={language}
                 onLogout={handleKioskLogout}
                 onProceed={handleVitalProceed}
                 onNavigateStep={handleNavigateStep}
@@ -258,6 +376,7 @@ export default function Home() {
 
             {step === "primaryClinics" && (
               <PrimaryClinics
+                language={language}
                 onLogout={handleKioskLogout}
                 onProceed={handlePrimaryClinicsProceed}
                 onNavigateStep={handleNavigateStep}
@@ -267,16 +386,21 @@ export default function Home() {
 
             {step === "summary" && (
               <SummaryScreen
+                language={language}
                 patientName={patientName}
-                age={patientInfo.age}
+                age={patientInfo.ageDisplay || patientInfo.age}
+                ageGroup={patientInfo.ageGroup}
                 gender={patientInfo.gender}
+                contactNumber={patientInfo.contactNumber}
                 patientAddress={patientInfo.address}
                 pwdStatus={patientInfo.pwdStatus}
                 bpSys={vitals.bpSys}
                 bpDia={vitals.bpDia}
                 hr={vitals.hr}
+                rr={vitals.rr}
                 spo2={vitals.spo2}
                 temperature={vitals.temperature}
+                news2={news2 ?? undefined}
                 complaints={complaints}
                 clinic={clinic}
                 destination={destination}

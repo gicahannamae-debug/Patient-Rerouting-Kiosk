@@ -39,9 +39,10 @@ function displayNumber(ticketCode: string): string {
   return ticketCode.split('-').slice(1).join('-');
 }
 
-const CAT_ORDER: Category[] = ['URGENT', 'PRIORITY', 'REGULAR'];
+const CAT_ORDER: Category[] = ['EMERGENCY', 'URGENT', 'PRIORITY', 'REGULAR'];
 
 const CAT_STYLE: Record<Category, { bg: string; text: string; badge: string; label: string }> = {
+  EMERGENCY: { bg: 'bg-red-800',   text: 'text-white', badge: 'bg-red-800 text-white',   label: 'EMERGENCY (E)' },
   URGENT:   { bg: 'bg-red-600',    text: 'text-white', badge: 'bg-red-600 text-white',    label: 'URGENT (U)'   },
   PRIORITY: { bg: 'bg-orange-400', text: 'text-white', badge: 'bg-orange-400 text-white', label: 'PRIORITY (P)' },
   REGULAR:  { bg: 'bg-green-500',  text: 'text-white', badge: 'bg-green-500 text-white',  label: 'REGULAR (R)'  },
@@ -130,9 +131,13 @@ function CompactCard({ patient }: { patient: Patient }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-white">{patient.name}</p>
         <p className="truncate text-xs text-slate-400">
-          {patient.age} y/o · {patient.sex} · {firstComplaint(patient)}
+          {patient.ageDisplay} · {patient.ageGroup} · {patient.sex} · {firstComplaint(patient)}
           {extra > 0 ? ` +${extra}` : ''}
+          {patient.news2 ? ` · NEWS2 ${patient.news2.total} (Partial)` : ''}
         </p>
+        {patient.contactNumber && (
+          <p className="truncate text-xs text-slate-500">{patient.contactNumber}</p>
+        )}
       </div>
     </div>
   );
@@ -162,8 +167,12 @@ function NowServingBanner({ patient, onFinish }: { patient: Patient | null; onFi
           <div className="col-span-2">
             <Field label="Patient Name" value={patient?.name ?? '—'} />
           </div>
-          <Field label="Age" value={patient ? `${patient.age} y/o` : '—'} />
+          <Field label="Age" value={patient?.ageDisplay ?? '—'} />
+          <Field label="Age Group" value={patient?.ageGroup ?? '—'} />
           <Field label="Sex" value={patient?.sex ?? '—'} />
+          <div className="col-span-2">
+            <Field label="Contact Number" value={patient?.contactNumber || '—'} />
+          </div>
           <div className="col-span-2 sm:col-span-4">
             <p className="text-xs text-slate-400 uppercase tracking-wider">Arrived At</p>
             <p className="text-lg font-bold text-white">{patient?.arrivedAt ?? '—'}</p>
@@ -207,6 +216,24 @@ function NowServingBanner({ patient, onFinish }: { patient: Patient | null; onFi
       <div className="mt-6">
         <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Vitals</p>
         <VitalsGrid vitals={patient?.vitals} large />
+        {patient?.news2 && (
+          <div className="mt-3 rounded-xl border border-cyan-800/60 bg-slate-900/60 px-4 py-3">
+            <p className="font-bold text-cyan-300">
+              NEWS2 {patient.news2.complete ? "Complete" : "Partial"}: {patient.news2.total} · {patient.news2.route}
+            </p>
+            <p className="mt-1 text-xs text-slate-300">
+              RR {patient.news2.components.respiratoryRate ?? "—"} · SpO₂ {patient.news2.components.oxygenSaturation ?? "—"} ·
+              SBP {patient.news2.components.systolicBloodPressure ?? "—"} · Pulse {patient.news2.components.pulseRate ?? "—"} ·
+              Consciousness {patient.news2.components.consciousness ?? "—"} · Temp {patient.news2.components.temperature ?? "—"} ·
+              Oxygen {patient.news2.components.supplementalOxygen ?? "—"}
+            </p>
+            {patient.news2.criticalParameters.length > 0 && (
+              <p className="mt-1 text-sm font-bold text-red-300">
+                Score of 3: {patient.news2.criticalParameters.join(", ")}
+              </p>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="mt-8 flex justify-end">
@@ -234,6 +261,7 @@ function ClinicQueue({ clinic, allPatients, onUpdate }: {
   const waiting = sortQueue(myPatients.filter(p => p.status === 'waiting'));
 
   const grouped: Record<Category, Patient[]> = {
+    EMERGENCY: waiting.filter(p => p.category === 'EMERGENCY'),
     URGENT: waiting.filter(p => p.category === 'URGENT'),
     PRIORITY: waiting.filter(p => p.category === 'PRIORITY'),
     REGULAR: waiting.filter(p => p.category === 'REGULAR'),
@@ -246,8 +274,8 @@ function ClinicQueue({ clinic, allPatients, onUpdate }: {
   };
 
   const erCounts = {
-    e1: myPatients.filter(p => p.category === 'URGENT').length,
-    e2: myPatients.filter(p => p.category !== 'URGENT').length,
+    e1: myPatients.filter(p => p.category === 'EMERGENCY' || p.category === 'URGENT').length,
+    e2: myPatients.filter(p => p.category !== 'EMERGENCY' && p.category !== 'URGENT').length,
   };
 
   // Finish the current patient; the next one in line is promoted automatically
@@ -270,7 +298,7 @@ function ClinicQueue({ clinic, allPatients, onUpdate }: {
           <div className="flex items-center gap-3">
             <div className={`w-2.5 h-8 rounded-full ${isER ? 'bg-red-500' : 'bg-cyan-500'}`} />
             <div>
-              <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">NMMC · BICA</p>
+              <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">BICA · OPD</p>
               <h1 className="text-xl font-black text-white">{clinic.name} Clinic Dashboard</h1>
             </div>
           </div>
@@ -312,7 +340,7 @@ function ClinicQueue({ clinic, allPatients, onUpdate }: {
           onFinish={() => { if (serving) handleFinish(serving); }}
         />
 
-        {CAT_ORDER.filter(cat => (isER ? cat === 'URGENT' : true)).map(cat => {
+        {CAT_ORDER.filter(cat => (isER ? cat === 'EMERGENCY' || cat === 'URGENT' : true)).map(cat => {
           const group = grouped[cat];
           const style = CAT_STYLE[cat];
           return (
@@ -480,7 +508,8 @@ function HistoryModal({ clinic, patients, onClose }: { clinic: Clinic; patients:
                 </span>
                 <div className="min-w-0 flex-1">
                   <p className="truncate font-semibold text-white">{p.name}</p>
-                  <p className="text-xs text-slate-400">{p.age} y/o · {p.sex} · Arrived {p.arrivedAt}</p>
+                  <p className="text-xs text-slate-400">{p.ageDisplay} · {p.ageGroup} · {p.sex} · Arrived {p.arrivedAt}</p>
+                  {p.contactNumber && <p className="text-xs text-slate-500">{p.contactNumber}</p>}
                 </div>
                 <p className="text-[11px] text-slate-500">Completed {formatDateTime(p.completedAt)}</p>
               </div>
@@ -543,7 +572,7 @@ function ClinicLogin({
           <span className="text-3xl font-black text-cyan-400">B</span>
         </div>
         <h1 className="text-3xl font-black text-white tracking-tight">BICA</h1>
-        <p className="text-slate-400 text-sm mt-1">Better Informed Care Access · NMMC</p>
+        <p className="text-slate-400 text-sm mt-1">Better Informed Care Access · Outpatient Department</p>
         <p className="text-slate-500 text-xs mt-1">{time}</p>
       </div>
 

@@ -2,20 +2,28 @@
 import React, { useEffect, useRef, useState } from "react";
 import type { TicketMetadata } from "./summaryTypes";
 import KioskHeader from "@/Component/kioskHeader";
+import type { KioskLanguage } from "@/lib/kioskLanguage";
+import type { NEWS2Result } from "@/lib/news2";
+import type { PatientAgeGroup } from "@/lib/patientDemographics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface SummaryScreenProps {
+  language: KioskLanguage;
   patientName: string;
   age: string;
+  ageGroup: PatientAgeGroup | "";
   gender: string;
+  contactNumber: string;
   patientAddress: string;
   pwdStatus: string;
   bpSys: string;
   bpDia: string;
   hr: string;
+  rr: string;
   spo2: string;
   temperature: string;
+  news2?: NEWS2Result;
   complaints: string;
   clinic: string;
   destination: string;
@@ -60,12 +68,15 @@ interface ReceiptData {
   serviceTitle: string;
   patientName: string;
   age: string;
+  ageGroup: PatientAgeGroup | "";
   gender: string;
+  contactNumber: string;
   address: string;
   pwdStatus: string;
   bpSys: string;
   bpDia: string;
   hr: string;
+  rr: string;
   spo2: string;
   temperature: string;
   complaints: string;
@@ -93,7 +104,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-function buildReceiptImage(d: ReceiptData): string {
+function buildReceiptImage(d: ReceiptData, language: KioskLanguage): string {
   const W = RECEIPT_WIDTH;
   const PAD = 24;
   const FONT = '"Courier New", monospace';
@@ -166,16 +177,16 @@ function buildReceiptImage(d: ReceiptData): string {
   centered("BICA", 60);
   centered("Better Informed Care Access", 22, "normal");
   y += 4;
-  centered(d.serviceTitle, 26);
+  centered(language === "en" ? d.serviceTitle : "KONSULTASYONG MEDIKAL", 26);
   dashed();
 
   // Date / time
-  row("DATE:", d.date);
-  row("TIME:", d.time);
+  row(language === "en" ? "DATE:" : "PETSA:", d.date);
+  row(language === "en" ? "TIME:" : "ORAS:", d.time);
   dashed();
 
   // Queue number (white on black block)
-  centered("QUEUE NUMBER", 24, "normal");
+  centered(language === "en" ? "QUEUE NUMBER" : "NUMERO SA PILA", 24, "normal");
   let size = 96;
   ctx.font = `bold ${size}px ${FONT}`;
   while (ctx.measureText(d.queueCode).width > W - PAD * 2 - 24 && size > 30) {
@@ -192,43 +203,54 @@ function buildReceiptImage(d: ReceiptData): string {
   ctx.fillStyle = "#000";
   y += blockH + 16;
 
-  centered("PROCEED TO", 22, "normal");
-  centered(d.destination, 30);
-  centered(d.clinic, 24, "normal");
+  centered(language === "en" ? "PROCEED TO" : "ADTO SA", 22, "normal");
+  centered(language === "en" ? d.destination : ({
+    "Surgical Services Wing": "Pakpak sa Serbisyo sa Operasyon",
+    "Internal Medicine Unit": "Yunit sa Internal Medicine",
+    "OB-GYNE Clinic": "Klinika sa OB-GYNE",
+    "Pediatrics Wing": "Pakpak sa Pediatrics",
+  }[d.destination] ?? d.destination), 30);
+  centered(language === "en" ? d.clinic : ({
+    "General Surgery": "General Surgery",
+    "Internal Medicine": "Internal Medicine",
+    "OB-GYNE": "OB-GYNE",
+    Pediatrics: "Pediatrics",
+  }[d.clinic] ?? d.clinic), 24, "normal");
   dashed();
 
   // Patient
-  leftText("PATIENT", 26);
+  leftText(language === "en" ? "PATIENT" : "PASYENTE", 26);
   y += 4;
-  row("STATUS:", "New Patient");
-  row("NAME:", d.patientName);
-  row("AGE:", d.age);
-  row("SEX:", d.gender);
-  row("PWD:", d.pwdStatus);
-  row("ADDRESS:", d.address);
+  row(language === "en" ? "STATUS:" : "KAHIMTANG:", language === "en" ? "New Patient" : "Bag-ong Pasyente");
+  row(language === "en" ? "NAME:" : "NGALAN:", d.patientName);
+  row(language === "en" ? "AGE:" : "EDAD:", d.age);
+  row(language === "en" ? "AGE GROUP:" : "GRUPO SA EDAD:", d.ageGroup || "N/A");
+  row(language === "en" ? "SEX:" : "SEKSO:", language === "en" ? d.gender : d.gender === "MALE" || d.gender === "Male" ? "LALAKI" : "BABAYE");
+  row(language === "en" ? "CONTACT:" : "KONTAK:", d.contactNumber);
+  row(language === "en" ? "PWD:" : "PWD:", language === "en" ? d.pwdStatus : d.pwdStatus === "Not PWD" ? "DILI PWD" : "OO, PWD");
+  row(language === "en" ? "ADDRESS:" : "ADDRESS:", d.address);
   dashed();
 
   // Vitals
-  leftText("VITAL SIGNS", 26);
+  leftText(language === "en" ? "VITAL SIGNS" : "MGA VITAL SIGN", 26);
   y += 4;
   row("BP:", `${d.bpSys}/${d.bpDia} mmHg`);
-  row("HEART RATE:", `${d.hr} bpm`);
+  row(language === "en" ? "HEART RATE:" : "PITIK SA KASINGKASING:", `${d.hr} bpm`);
+  row(language === "en" ? "RESPIRATORY RATE:" : "GIKUSGON SA PAGGINHAWA:", `${d.rr} breaths/min`);
   row("SpO2:", `${d.spo2} %`);
-  row("TEMP:", `${d.temperature} C`);
+  row(language === "en" ? "TEMP:" : "TEMP:", `${d.temperature} C`);
   dashed();
 
   // Complaint
-  leftText("CHIEF COMPLAINT", 26);
+  leftText(language === "en" ? "CHIEF COMPLAINT" : "PANGUNAHING REKLAMO", 26);
   y += 4;
   leftText(d.complaints || "N/A", 26);
   dashed();
 
   // Footer
-  centered("Present this slip to the triage", 24);
-  centered("nurse or clinic window.", 24);
+  centered(language === "en" ? "Present this slip to the triage nurse or clinic window." : "Ipakita kini nga papel sa triage nurse o sa bintana sa klinika.", 24);
   y += 6;
-  centered("Keep this ticket with you.", 22, "normal");
-  centered("Hintayin po ang tawag sa inyong numero.", 22, "normal");
+  centered(language === "en" ? "Keep this ticket with you." : "Tipigi kini nga tiket.", 22, "normal");
 
   // Crop to content (+ bottom margin for the cutter)
   const out = document.createElement("canvas");
@@ -279,16 +301,21 @@ function printImage(dataUrl: string): Promise<void> {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function SummaryScreen({
+  language,
   patientName,
   age,
+  ageGroup,
   gender,
+  contactNumber,
   patientAddress,
   pwdStatus,
   bpSys,
   bpDia,
   hr,
+  rr,
   spo2,
   temperature,
+  news2,
   complaints,
   clinic,
   destination,
@@ -318,12 +345,15 @@ export default function SummaryScreen({
     serviceTitle: ticketMetadata?.serviceTitle ?? "MEDICAL CONSULTATION",
     patientName,
     age,
+    ageGroup,
     gender,
+    contactNumber,
     address: patientAddress,
     pwdStatus,
     bpSys,
     bpDia,
     hr,
+    rr,
     spo2,
     temperature,
     complaints,
@@ -335,9 +365,9 @@ export default function SummaryScreen({
   };
 
   useEffect(() => {
-    setReceiptUrl(buildReceiptImage(data));
+    setReceiptUrl(buildReceiptImage(data, language));
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [JSON.stringify(data)]);
+  }, [JSON.stringify(data), language]);
 
   const handlePrint = async () => {
     if (!receiptUrl || phase === "printing" || phase === "done") return;
@@ -376,7 +406,8 @@ export default function SummaryScreen({
       `}</style>
 
       <KioskHeader
-        activeStep={6}
+        language={language}
+        activeStep={7}
         onNavigateStep={onNavigateStep}
         onNavigateVitalPart={onNavigateVitalPart}
         onLogout={onLogout}
@@ -385,8 +416,49 @@ export default function SummaryScreen({
       {/* MAIN */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 py-8">
         <h2 className="text-4xl font-extrabold text-white text-center">
-          {phase === "preview" || phase === "error" ? "Your Triage Ticket" : "Please wait"}
+          {phase === "preview" || phase === "error"
+            ? language === "en" ? "Your Triage Ticket" : "Imong Tiket sa Triage"
+            : language === "en" ? "Please wait" : "Palihog hulat"}
         </h2>
+
+        {news2 && (
+          <section aria-label="NEWS2 result" className="w-full max-w-3xl rounded-2xl border border-cyan-700 bg-cyan-900 p-5 text-white">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <h3 className="text-xl font-bold">NEWS2 · {news2.complete ? "Complete" : "Partial"}</h3>
+              <p className="text-lg font-extrabold">
+                Total: {news2.total} · {news2.route}
+              </p>
+            </div>
+            <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+              {([
+                ["Respiratory rate", news2.components.respiratoryRate],
+                ["SpO₂ (Scale 1)", news2.components.oxygenSaturation],
+                ["Systolic blood pressure", news2.components.systolicBloodPressure],
+                ["Pulse rate", news2.components.pulseRate],
+                ["Consciousness", news2.components.consciousness],
+                ["Temperature", news2.components.temperature],
+                ["Supplemental oxygen", news2.components.supplementalOxygen],
+              ] as const).map(([label, score]) => (
+                <div key={label} className="flex justify-between gap-2 border-b border-cyan-800 py-1">
+                  <dt>{label}</dt>
+                  <dd className={score === 3 ? "font-black text-red-300" : "font-bold"}>
+                    {score === null ? "Not assessed" : score}
+                  </dd>
+                </div>
+              ))}
+            </dl>
+            {!news2.complete && (
+              <p className="mt-3 text-sm text-cyan-100">
+                Missing: {news2.missingParameters.join(", ")}. Unassessed parameters are not included in the total.
+              </p>
+            )}
+            {news2.criticalParameters.length > 0 && (
+              <p className="mt-2 font-bold text-red-300">
+                Score of 3: {news2.criticalParameters.join(", ")}
+              </p>
+            )}
+          </section>
+        )}
 
         {/* Receipt preview: large, shrinks while printing */}
         <div
@@ -401,7 +473,7 @@ export default function SummaryScreen({
               className="h-full w-auto object-contain"
             />
           ) : (
-            <div className="px-16 text-lg font-semibold text-gray-500">Preparing ticket…</div>
+            <div className="px-16 text-lg font-semibold text-gray-500">{language === "en" ? "Preparing ticket…" : "Giandam ang tiket…"}</div>
           )}
         </div>
 
@@ -416,13 +488,13 @@ export default function SummaryScreen({
             <svg className="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
             </svg>
-            <span>PRINT TICKET</span>
+            <span>{language === "en" ? "PRINT TICKET" : "I-IMPRINTA ANG TIKET"}</span>
           </button>
         )}
 
         {phase === "printing" && (
           <div className="w-full max-w-xl text-center">
-            <p className="text-3xl font-bold text-cyan-100">Printing your ticket…</p>
+            <p className="text-3xl font-bold text-cyan-100">{language === "en" ? "Printing your ticket…" : "Gi-imprinta ang imong tiket…"}</p>
             <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-cyan-900">
               <div className="bica-print-bar h-full w-1/3 rounded-full bg-emerald-400" />
             </div>
@@ -431,19 +503,19 @@ export default function SummaryScreen({
 
         {phase === "done" && (
           <p className="text-3xl font-bold text-emerald-300 text-center">
-            Ticket printed ✓ Please take your ticket.
+            {language === "en" ? "Ticket printed ✓ Please take your ticket." : "Na-imprinta na ang tiket ✓ Palihog kuhaa kini."}
           </p>
         )}
 
         {phase === "error" && (
           <div className="w-full max-w-xl text-center">
-            <p className="text-2xl font-bold text-yellow-300">Could not print. Please try again or ask staff for help.</p>
+            <p className="text-2xl font-bold text-yellow-300">{language === "en" ? "Could not print. Please try again or ask staff for help." : "Dili ma-imprinta. Sulayi pag-usab o pangayo og tabang sa kawani."}</p>
             <button
               type="button"
               onClick={handlePrint}
               className="mt-4 rounded-xl border-2 border-emerald-300 bg-emerald-600 px-8 py-3 text-xl font-bold text-white hover:bg-emerald-500 cursor-pointer"
             >
-              Try again
+              {language === "en" ? "Try again" : "Sulayi pag-usab"}
             </button>
           </div>
         )}
@@ -451,7 +523,7 @@ export default function SummaryScreen({
 
       {/* FOOTER */}
       <footer className="w-full py-4 px-8 text-center text-cyan-300/60 text-sm border-t border-cyan-900">
-        BICA Outpatient Self-Service Kiosk
+        {language === "en" ? "BICA Outpatient Self-Service Kiosk" : "Kiosk sa Outpatient sa BICA"}
       </footer>
     </div>
   );

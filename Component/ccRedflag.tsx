@@ -1,6 +1,10 @@
 'use client';
 import React, { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import KioskHeader from "@/Component/kioskHeader";
+import type { KioskLanguage } from "@/lib/kioskLanguage";
+import PatientDemographicsForm from "@/Component/patientDemographics";
+import type { PatientDemographics } from "@/lib/patientDemographics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -24,6 +28,7 @@ interface RedFlagCategory {
 export interface EmergencyAlert {
   ticketNumber: string;
   symptom: string;
+  patient: PatientDemographics;
   category: string;
   clinicalCategory: string;
   clinics: ClinicName[];
@@ -34,15 +39,19 @@ export interface EmergencyAlert {
 export interface EmergencyPrintPayload {
   symptom: string;
   ticketNumber: string;
+  patient: PatientDemographics;
   /** JPEG data URL of the receipt (black & white, thermal width) */
   imageDataUrl: string;
 }
 
 interface CcRedflagProps {
+  language: KioskLanguage;
+  onLanguageChange: (language: KioskLanguage) => void;
   onLogout?: () => void;
   onNavigateStep?: (step: number) => void;
   /** Called when the patient answers "NONE apply" (no emergency) */
   onProceed?: () => void;
+  onPatientDemographics: (patient: PatientDemographics) => void;
   /** Called IMMEDIATELY when an emergency is selected (before printing) */
   onEmergencyAlert?: (alert: EmergencyAlert) => void;
   /** Send the receipt image to your thermal printer. If omitted, the image is
@@ -175,19 +184,12 @@ const CATEGORIES: RedFlagCategory[] = [
 ];
 
 
-const STEPS = [
-  "Welcome",
-  "Safety Check",
-  "Registration",
-  "Forms",
-  "Take Vital Signs",
-  "Complaints",
-  "Ticket",
-];
 const SAFETY_STEP_INDEX = 1;
+const TICKET_STEP_INDEX = 7;
 
 /** Seconds on the ticket screen before returning to Welcome */
 const TICKET_SCREEN_SECONDS = 20;
+const WELCOME_BACKGROUND = "/bg3.jpg";
 
 const CLINIC_CODE: Record<ClinicName, string> = {
   "OB-GYN": "OB",
@@ -196,7 +198,7 @@ const CLINIC_CODE: Record<ClinicName, string> = {
   "Pediatrics": "PED",
 };
 
-type ScreenStep = "welcome" | "screening" | "emergency" | "erTicket";
+type ScreenStep = "welcome" | "demographics" | "safetyIntro" | "screening" | "emergency" | "erTicket";
 type PrintStatus = "idle" | "generating" | "printing" | "printed" | "error";
 
 // ─── Thermal receipt image ────────────────────────────────────────────────────
@@ -223,7 +225,7 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
   return lines;
 }
 
-function buildReceiptImage(data: { symptom: string; ticketNumber: string }): string {
+function buildReceiptImage(data: { symptom: string; ticketNumber: string; patient: PatientDemographics }, language: KioskLanguage): string {
   const W = RECEIPT_WIDTH;
   const PAD = 24;
   const FONT = '"Courier New", monospace';
@@ -262,23 +264,45 @@ function buildReceiptImage(data: { symptom: string; ticketNumber: string }): str
   };
 
   // Header
-  centered("Welcome to Bica", 48);
-  centered("Emergency Triage Slip", 24, "normal");
-  centered("OPD Kiosk", 24, "normal");
+  centered(language === "en" ? "Welcome to Bica" : "Maayong pag-abot sa BICA", 48);
+  centered(language === "en" ? "Emergency Triage Slip" : "Papel sa Emergency Triage", 24, "normal");
+  centered(language === "en" ? "OPD Kiosk" : "Kiosk sa OPD", 24, "normal");
   dashed();
 
   // Date / time row
   const now = new Date();
   ctx.font = `normal 24px ${FONT}`;
   ctx.textAlign = "left";
-  ctx.fillText(`DATE: ${now.toLocaleDateString()}`, PAD, y);
+  ctx.fillText(`${language === "en" ? "DATE" : "PETSA"}: ${now.toLocaleDateString()}`, PAD, y);
   ctx.textAlign = "right";
   ctx.fillText(
-    `TIME: ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
+    `${language === "en" ? "TIME" : "ORAS"}: ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
     W - PAD,
     y
   );
   y += 34;
+  dashed();
+
+  ctx.textAlign = "left";
+  ctx.font = `normal 24px ${FONT}`;
+  ctx.fillText(language === "en" ? "PATIENT DETAILS" : "IMPORMASYON SA PASYENTE", PAD, y);
+  y += 32;
+  const patientRows = [
+    [language === "en" ? "NAME" : "NGALAN", `${data.patient.firstName} ${data.patient.lastName}`],
+    [language === "en" ? "AGE" : "EDAD", `${data.patient.ageDisplay} · ${data.patient.ageGroup}`],
+    [language === "en" ? "SEX" : "SEKSO", data.patient.gender],
+    [language === "en" ? "CONTACT" : "KONTAK", data.patient.contactNumber],
+  ];
+  for (const [label, value] of patientRows) {
+    ctx.font = `normal 24px ${FONT}`;
+    ctx.fillText(`${label}:`, PAD, y);
+    y += 30;
+    for (const line of wrapText(ctx, value, W - PAD * 2)) {
+      ctx.font = `bold 24px ${FONT}`;
+      ctx.fillText(line, PAD + 12, y);
+      y += 30;
+    }
+  }
   dashed();
 
   // Emergency banner (white on black, since thermal paper has no red)
@@ -288,23 +312,23 @@ function buildReceiptImage(data: { symptom: string; ticketNumber: string }): str
   ctx.fillStyle = "#fff";
   ctx.textAlign = "center";
   ctx.font = `bold 38px ${FONT}`;
-  ctx.fillText("*** EMERGENCY ***", W / 2, y + 12);
+  ctx.fillText(language === "en" ? "*** EMERGENCY ***" : "*** EMERHENSIYA ***", W / 2, y + 12);
   ctx.fillStyle = "#000";
   y += bannerH + 16;
 
   // Complaint
   ctx.textAlign = "left";
   ctx.font = `normal 24px ${FONT}`;
-  ctx.fillText("CHIEF COMPLAINT:", PAD, y);
+  ctx.fillText(language === "en" ? "CHIEF COMPLAINT:" : "PANGUNAHING REKLAMO:", PAD, y);
   y += 32;
   centered(data.symptom, 30);
   dashed();
 
   // Destination
-  centered("DESTINATION", 22, "normal");
-  centered("EMERGENCY ROOM (ER)", 36);
+  centered(language === "en" ? "DESTINATION" : "PADULNGAN", 22, "normal");
+  centered(language === "en" ? "EMERGENCY ROOM (ER)" : "EMERGENCY ROOM (ER)", 36);
   y += 8;
-  centered("PRIORITY QUEUE CODE", 22, "normal");
+  centered(language === "en" ? "PRIORITY QUEUE CODE" : "KODE SA PRAYORIDAD SA PILA", 22, "normal");
 
   // Ticket number, shrunk to fit the paper width
   let size = 84;
@@ -370,16 +394,23 @@ function printImage(dataUrl: string): Promise<void> {
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export default function CcRedflag({
+  language,
+  onLanguageChange,
   onLogout,
   onNavigateStep,
   onProceed,
+  onPatientDemographics,
   onEmergencyAlert,
   onPrintEmergencyTicket,
   onEmergencyDone,
 }: CcRedflagProps) {
-  const [language, setLanguage] = useState<"en" | "ceb">("en");
   const [screenStep, setScreenStep] = useState<ScreenStep>("welcome");
-  const [alertData, setAlertData] = useState({ symptom: "", ticketNumber: "" });
+  const [patientDetails, setPatientDetails] = useState<PatientDemographics | null>(null);
+  const [alertData, setAlertData] = useState<{ symptom: string; ticketNumber: string; patient: PatientDemographics | null }>({
+    symptom: "",
+    ticketNumber: "",
+    patient: null,
+  });
 
   const [view, setView] = useState<"categories" | "experiences">("categories");
   const [categoryId, setCategoryId] = useState<string | null>(null);
@@ -421,7 +452,7 @@ export default function CcRedflag({
 
   // ── Printing ────────────────────────────────────────────────────────────────
 
-  const doPrint = async (url: string, data: { symptom: string; ticketNumber: string }) => {
+  const doPrint = async (url: string, data: { symptom: string; ticketNumber: string; patient: PatientDemographics }) => {
     try {
       setPrintStatus("printing");
       if (onPrintEmergencyTicket) {
@@ -438,24 +469,24 @@ export default function CcRedflag({
   // Auto: build the receipt image, show the preview, then print once
   useEffect(() => {
     if (screenStep !== "erTicket") return;
-    if (!alertData.ticketNumber) return;
+    if (!alertData.ticketNumber || !alertData.patient) return;
     if (printedFor.current === alertData.ticketNumber) return;
     printedFor.current = alertData.ticketNumber;
+    const ticketData = { ...alertData, patient: alertData.patient };
 
     (async () => {
       try {
         setPrintStatus("generating");
-        const url = buildReceiptImage(alertData);
+        const url = buildReceiptImage(ticketData, language);
         setReceiptUrl(url);
         // let the preview paint before the print dialog/handler takes over
         await new Promise(r => setTimeout(r, 900));
-        await doPrint(url, alertData);
+        await doPrint(url, ticketData);
       } catch {
         setPrintStatus("error");
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screenStep, alertData]);
+  }, [screenStep, alertData, language]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
 
@@ -470,13 +501,13 @@ export default function CcRedflag({
   };
 
   const handleSelectExperience = (exp: Experience) => {
-    if (!selectedCategory) return;
+    if (!selectedCategory || !patientDetails) return;
 
     const randomNum = Math.floor(100 + Math.random() * 900);
     const clinicTag = exp.clinics.map(c => CLINIC_CODE[c]).join("/");
     const ticketNumber = `ER-${clinicTag}-${randomNum}`;
 
-    setAlertData({ symptom: exp.text, ticketNumber });
+    setAlertData({ symptom: exp.text, ticketNumber, patient: patientDetails });
     setScreenStep("emergency");
 
     if (typeof window !== "undefined") {
@@ -487,6 +518,7 @@ export default function CcRedflag({
     onEmergencyAlert?.({
       ticketNumber,
       symptom: exp.text,
+      patient: patientDetails,
       category: selectedCategory.name,
       clinicalCategory: selectedCategory.clinical,
       clinics: exp.clinics,
@@ -510,7 +542,7 @@ export default function CcRedflag({
     printedFor.current = null;
     setReceiptUrl(null);
     setPrintStatus("idle");
-    setAlertData({ symptom: "", ticketNumber: "" });
+    setAlertData({ symptom: "", ticketNumber: "", patient: null });
     resetScreening();
     setScreenStep("welcome");
     onEmergencyDone?.();
@@ -519,7 +551,7 @@ export default function CcRedflag({
   const handleNavigateStep = (step: number) => {
     if (step === 0) {
       resetScreening();
-      setAlertData({ symptom: "", ticketNumber: "" });
+      setAlertData({ symptom: "", ticketNumber: "", patient: null });
       setScreenStep("welcome");
       return;
     }
@@ -540,21 +572,25 @@ export default function CcRedflag({
     screenStep === "welcome"
       ? 0
       : screenStep === "erTicket"
-        ? STEPS.length - 1
+        ? TICKET_STEP_INDEX
         : SAFETY_STEP_INDEX;
 
   const currentPart = view === "experiences" ? 2 : 1;
 
   const statusText: Record<PrintStatus, string> = {
     idle: "",
-    generating: "Preparing your ticket…",
-    printing: "Printing your ticket…",
-    printed: "Ticket printed ✓ Please take it with you.",
-    error: "Could not print. Staff will assist you.",
+    generating: language === "en" ? "Preparing your ticket…" : "Giandam ang imong tiket…",
+    printing: language === "en" ? "Printing your ticket…" : "Gi-imprinta ang imong tiket…",
+    printed: language === "en" ? "Ticket printed ✓ Please take it with you." : "Na-imprinta na ang tiket ✓ Palihog kuhaa kini.",
+    error: language === "en" ? "Could not print. Staff will assist you." : "Dili ma-imprinta. Motabang ang kawani.",
   };
 
   return (
-    <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
+    <div
+      className={`min-h-screen flex flex-col justify-between font-sans ${
+        screenStep === "welcome" ? "bg-slate-950" : "bg-cyan-950"
+      }`}
+    >
       <style>{`
         @keyframes bica-flash {
           0%, 100% { background-color: #450a0a; }
@@ -581,12 +617,15 @@ export default function CcRedflag({
         }
       `}</style>
 
-      <KioskHeader
-        activeStep={activeStep}
-        vitalPart={activeStep === SAFETY_STEP_INDEX ? currentPart : undefined}
-        onNavigateStep={handleNavigateStep}
-        onLogout={onLogout}
-      />
+      {screenStep !== "welcome" && screenStep !== "demographics" && (
+        <KioskHeader
+          language={language}
+          activeStep={activeStep}
+          vitalPart={activeStep === SAFETY_STEP_INDEX ? currentPart : undefined}
+          onNavigateStep={handleNavigateStep}
+          onLogout={onLogout}
+        />
+      )}
 
 
       {/* START OF UI COMPONENTS -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------*/}
@@ -594,98 +633,118 @@ export default function CcRedflag({
 
       {/* STEP 0: WELCOME */}
       {screenStep === "welcome" && (
-        <div className="flex-1 flex flex-col items-center justify-center px-8 py-16 max-w-5xl mx-auto text-center my-auto w-full">
+        <main
+          className="relative isolate flex min-h-screen flex-1 flex-col items-center justify-center overflow-hidden px-4 py-8 sm:px-8"
+          style={{
+            backgroundImage: `url("${WELCOME_BACKGROUND}")`,
+            backgroundPosition: "center",
+            backgroundSize: "cover",
+          }}
+        >
+          <div aria-hidden="true" className="absolute inset-0 -z-10 bg-gradient-to-br from-slate-950/55 via-cyan-950/35 to-indigo-950/65" />
+          <section className="w-full max-w-4xl rounded-[2rem] border border-white/70 bg-white/90 p-6 text-center shadow-2xl backdrop-blur-md sm:p-10">
+            <div className="mx-auto mb-5 flex h-32 w-32 items-center justify-center rounded-full bg-white shadow-lg ring-1 ring-slate-200 sm:h-40 sm:w-40">
+              <Image
+                src="/kiosk-removebg-preview.png"
+                alt="BICA patient kiosk"
+                width={300}
+                height={300}
+                priority
+                className="h-28 w-28 object-contain sm:h-36 sm:w-36"
+              />
+            </div>
+            <p className="text-sm font-black uppercase tracking-[0.35em] text-cyan-800">BICA · OPD</p>
+            <h1 className="mt-2 text-4xl font-black tracking-tight text-slate-950 sm:text-6xl">
+              {language === "en" ? "Welcome" : "Maayong pag-abot"}
+            </h1>
+            <p className="mt-2 text-base font-semibold text-slate-600 sm:text-lg">
+              {language === "en" ? "Better Informed Care Access" : "Outpatient Department Kiosk"}
+            </p>
 
-          <div className="inline-block bg-yellow-400 text-cyan-950 text-xl font-extrabold tracking-widest uppercase px-8 py-3 rounded-full mb-8 border-2 border-yellow-300 shadow-lg">
-            {language === "en"
-              ? "Welcome to the Outpatient Department"
-              : "Maayong pag-abot sa Outpatient Department"}
-          </div>
-
-          <div className="w-full bg-cyan-900/30 border border-cyan-500/30 rounded-3xl p-8 sm:p-10 backdrop-blur-sm shadow-2xl flex flex-col items-center gap-8">
-
-            {/* LANGUAGE SELECTOR */}
-            <div className="w-full max-w-2xl">
-              <p className="text-xl sm:text-2xl text-cyan-100 font-bold mb-5">
-                {language === "en"
-                  ? "Select your preferred language"
-                  : "Pilia ang imong gustong pinulongan"}
-              </p>
-
-              <div className="grid grid-cols-2 gap-4">
+            <div className="mx-auto mt-8 max-w-2xl">
+              <h2 className="mb-4 text-lg font-bold text-slate-700 sm:text-xl">
+                {language === "en" ? "Select your preferred language" : "Pilia ang imong gustong pinulongan"}
+              </h2>
+              <div className="grid gap-3 sm:grid-cols-2">
                 <button
                   type="button"
-                  onClick={() => setLanguage("en")}
-                  aria-pressed={language === "en"}
-                  className={`py-5 px-4 rounded-2xl text-xl sm:text-2xl font-extrabold border-2 transition-all cursor-pointer ${language === "en"
-                    ? "bg-yellow-400 text-cyan-950 border-yellow-300 shadow-lg scale-[1.02]"
-                    : "bg-cyan-950/50 text-cyan-100 border-cyan-500/40 hover:bg-cyan-800/60"
-                    }`}
+                  onClick={() => {
+                    onLanguageChange("en");
+                    resetScreening();
+                    setScreenStep("demographics");
+                  }}
+                  className="rounded-2xl border-2 border-cyan-800 bg-cyan-900 px-5 py-5 text-xl font-extrabold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-800 focus-visible:outline focus-visible:outline-4 focus-visible:outline-yellow-400 sm:text-2xl"
                 >
-                  🇺🇸 English
-                  {language === "en" && (
-                    <span className="block text-sm mt-1">✓ Selected</span>
-                  )}
+                  English <span aria-hidden="true" className="ml-2">→</span>
                 </button>
-
                 <button
                   type="button"
-                  onClick={() => setLanguage("ceb")}
-                  aria-pressed={language === "ceb"}
-                  className={`py-5 px-4 rounded-2xl text-xl sm:text-2xl font-extrabold border-2 transition-all cursor-pointer ${language === "ceb"
-                    ? "bg-yellow-400 text-cyan-950 border-yellow-300 shadow-lg scale-[1.02]"
-                    : "bg-cyan-950/50 text-cyan-100 border-cyan-500/40 hover:bg-cyan-800/60"
-                    }`}
+                  onClick={() => {
+                    onLanguageChange("ceb");
+                    resetScreening();
+                    setScreenStep("demographics");
+                  }}
+                  className="rounded-2xl border-2 border-cyan-800 bg-cyan-900 px-5 py-5 text-xl font-extrabold text-white shadow-lg transition hover:-translate-y-0.5 hover:bg-cyan-800 focus-visible:outline focus-visible:outline-4 focus-visible:outline-yellow-400 sm:text-2xl"
                 >
-                  🇵🇭 Cebuano
-                  {language === "ceb" && (
-                    <span className="block text-sm mt-1">✓ Napili</span>
-                  )}
+                  Cebuano <span className="text-base font-semibold">(Bisaya)</span>
+                  <span aria-hidden="true" className="ml-2">→</span>
                 </button>
               </div>
             </div>
+          </section>
 
-            {/* WELCOME INSTRUCTIONS */}
-            <p className="text-2xl sm:text-4xl text-cyan-100 max-w-3xl leading-relaxed font-semibold tracking-wide">
-              {language === "en" ? (
-                <>
-                  For your safety, please answer the questions.
-                  <br className="hidden sm:inline" />
-                  Tap the box that{" "}
-                  <span className="font-extrabold text-white underline decoration-yellow-400 underline-offset-8">
-                    applies to you
-                  </span>.
-                </>
-              ) : (
-                <>
-                  Alang sa imong kaluwasan, palihog tubaga ang mga pangutana.
-                  <br className="hidden sm:inline" />
-                  Pindota ang kahon nga{" "}
-                  <span className="font-extrabold text-white underline decoration-yellow-400 underline-offset-8">
-                    angay kanimo
-                  </span>.
-                </>
-              )}
-            </p>
+          <p className="mt-4 text-center text-xs font-medium text-white/90">
+            {language === "en" ? "Outpatient Department" : "Departamento sa Outpatient"}
+          </p>
+        </main>
+      )}
 
-            {/* START BUTTON */}
-            <button
-              onClick={() => {
-                resetScreening();
-                setScreenStep("screening");
-              }}
-              className="w-full max-w-2xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white text-2xl sm:text-4xl font-black py-7 px-6 sm:px-10 rounded-2xl shadow-[0_10px_30px_rgba(5,150,105,0.4)] transition-all active:scale-95 border-2 border-emerald-300 flex items-center justify-center gap-4 sm:gap-6 cursor-pointer tracking-wider"
-            >
-              <span>
+      {screenStep === "demographics" && (
+        <PatientDemographicsForm
+          language={language}
+          onBack={() => setScreenStep("welcome")}
+          onSubmit={patient => {
+            setPatientDetails(patient);
+            onPatientDemographics(patient);
+            setScreenStep("safetyIntro");
+          }}
+        />
+      )}
+
+      {screenStep === "safetyIntro" && (
+        <main className="flex flex-1 items-center justify-center bg-gradient-to-br from-cyan-950 via-slate-900 to-blue-950 px-5 py-12">
+          <section className="flex w-full max-w-5xl flex-row items-center gap-4 rounded-3xl border border-cyan-400/30 bg-slate-900/75 p-5 text-left text-white shadow-2xl backdrop-blur sm:gap-10 sm:p-12">
+            <div className="min-w-0 flex-1">
+              <h1 className="text-2xl font-black sm:text-5xl">
+                {language === "en" ? "Safety Check" : "Pagsusi sa Kaluwasan"}
+              </h1>
+              <p className="mt-4 text-base leading-relaxed text-cyan-50 sm:text-2xl">
                 {language === "en"
-                  ? "START SAFETY CHECK"
-                  : "SUGDI ANG SAFETY CHECK"}
-              </span>
-              <span className="text-4xl sm:text-5xl">→</span>
-            </button>
-
-          </div>
-        </div>
+                  ? "We’ll check for emergency symptoms. Select any that apply."
+                  : "Susihon nato ang mga sintomas sa emerhensiya. Pilia ang naa kanimo."}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  resetScreening();
+                  setScreenStep("screening");
+                }}
+                className="mt-6 inline-flex min-h-14 w-full items-center justify-center gap-3 rounded-2xl border-2 border-emerald-300 bg-emerald-600 px-4 py-4 text-base font-black text-white shadow-lg transition hover:bg-emerald-500 focus-visible:outline focus-visible:outline-4 focus-visible:outline-yellow-300 sm:mt-9 sm:min-h-16 sm:px-6 sm:py-5 sm:text-2xl"
+              >
+                {language === "en" ? "Proceed to Safety Check" : "Padayon sa Pagsusi sa Kaluwasan"}
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+            <Image
+              src="/safety-check-icon.png"
+              alt=""
+              aria-hidden="true"
+              width={320}
+              height={320}
+              className="h-24 w-24 shrink-0 object-contain sm:h-40 sm:w-40 md:h-56 md:w-56"
+            />
+          </section>
+        </main>
       )}
 
 
@@ -733,7 +792,7 @@ export default function CcRedflag({
                 <span>
                   {language === "en"
                     ? `Emergency Check: ${EMERGENCY_TITLE}`
-                    : `Pagsusi sa Emerhensiya: ${EMERGENCY_TITLE}`}
+                    : "Pagsusi sa emerhensiya: Mga emerhensiyang naghulga sa kinabuhi (ABCs)"}
                 </span>
               </div>
 
@@ -763,7 +822,7 @@ export default function CcRedflag({
                       <p className="text-red-50 group-hover:text-white text-3xl font-bold leading-snug text-center">
                         {language === "en"
                           ? cat.name
-                          : cat.nameCeb ?? cat.name}
+                          : cat.nameCeb}
                       </p>
                     </button>
                   ))}
@@ -801,7 +860,7 @@ export default function CcRedflag({
                             <p className="text-xl sm:text-2xl font-semibold leading-relaxed text-red-50 group-hover:text-white">
                               {language === "en"
                                 ? exp.text
-                                : exp.textCeb ?? exp.text}
+                                : exp.textCeb}
                             </p>
                           </button>
                         ))}
@@ -835,8 +894,8 @@ export default function CcRedflag({
                     className="w-full sm:w-auto px-8 py-4 bg-cyan-900 border-2 border-cyan-400 text-white text-xl font-bold rounded-xl hover:bg-cyan-800 transition-colors shadow-lg cursor-pointer"
                   >
                     {language === "en"
-                      ? "NONE apply — Proceed to Registration →"
-                      : "WALA niini — Padayon sa Pagparehistro →"}
+                      ? "NONE apply — Continue to Vital Signs →"
+                      : "WALA niini — Padayon sa Pagsukod sa Vital Sign →"}
                   </button>
                 )}
 
@@ -855,31 +914,42 @@ export default function CcRedflag({
         >
           <div className="w-full max-w-4xl text-white">
             <h3 className="text-5xl sm:text-7xl font-black mb-4 tracking-tight drop-shadow-lg">
-              EMERGENCY
+              {language === "en" ? "EMERGENCY" : "EMERHENSIYA"}
             </h3>
 
             <p className="text-2xl sm:text-3xl mb-8">
-              Emergency Symptom Detected:{" "}
+              {language === "en" ? "Emergency symptom detected:" : "Nakit-an nga sintomas sa emerhensiya:"}{" "}
               <span className="font-bold underline decoration-white">
                 {alertData.symptom}
               </span>
             </p>
 
             <div className="mx-auto mb-8 w-fit rounded-2xl border-2 border-white bg-red-950 px-10 py-4 shadow-2xl">
-              <span className="block text-xs font-bold uppercase tracking-widest text-red-300">Queue Number</span>
+              <span className="block text-xs font-bold uppercase tracking-widest text-red-300">{language === "en" ? "Queue Number" : "Numero sa Pila"}</span>
               <span className="block text-5xl sm:text-6xl font-black tracking-wider text-white">{alertData.ticketNumber}</span>
             </div>
 
+            {alertData.patient && (
+              <div className="mx-auto mb-8 grid max-w-3xl gap-3 rounded-2xl border border-red-300/60 bg-red-950/80 p-5 text-left sm:grid-cols-2">
+                <p><span className="font-bold">{language === "en" ? "Patient" : "Pasyente"}:</span> {alertData.patient.firstName} {alertData.patient.lastName}</p>
+                <p><span className="font-bold">{language === "en" ? "Age" : "Edad"}:</span> {alertData.patient.ageDisplay} · {alertData.patient.ageGroup}</p>
+                <p><span className="font-bold">{language === "en" ? "Sex" : "Sekso"}:</span> {alertData.patient.gender}</p>
+                <p><span className="font-bold">{language === "en" ? "Contact" : "Kontak"}:</span> {alertData.patient.contactNumber}</p>
+              </div>
+            )}
+
             <div className="bg-slate-950/90 p-10 rounded-2xl border border-red-500/50 max-w-2xl mx-auto shadow-inner flex flex-col items-center gap-8">
               <p className="text-2xl sm:text-3xl font-bold leading-relaxed text-red-100">
-                Please stay where you are. Staff has been alerted.
+                {language === "en"
+                  ? "Please stay where you are. Staff has been alerted."
+                  : "Palihog pagpabilin sa imong nahimutangan. Gipahibalo na ang mga kawani."}
               </p>
 
               <button
                 onClick={() => setScreenStep("erTicket")}
                 className="w-full max-w-md bg-red-600 hover:bg-red-500 active:bg-red-700 text-white text-2xl font-bold py-5 px-8 rounded-xl shadow-[0_8px_25px_rgba(220,38,38,0.5)] transition-all active:scale-95 border border-red-300 flex items-center justify-center gap-4 cursor-pointer"
               >
-                <span>Continue to Print Ticket →</span>
+                <span>{language === "en" ? "Continue to Print Ticket →" : "Padayon sa pag-imprinta sa tiket →"}</span>
               </button>
             </div>
           </div>
@@ -900,13 +970,17 @@ export default function CcRedflag({
             </div>
 
             <h2 className="mb-3 text-4xl font-extrabold text-white sm:text-6xl">
-              Please stay calm and relax.
+              {language === "en" ? "Please stay calm and relax." : "Palihog kalma lang ug pagpahayahay."}
             </h2>
             <p className="max-w-4xl text-2xl font-semibold leading-relaxed text-teal-100 sm:text-4xl">
-              Our staff is coming to help you. Please wait here.
+              {language === "en"
+                ? "Our staff is coming to help you. Please wait here."
+                : "Padulong na ang among mga kawani aron motabang kanimo. Palihog paghulat dinhi."}
             </p>
             <p className="mt-3 max-w-4xl text-xl text-teal-200/90 sm:text-2xl">
-              Huminahon po kayo. Paparating na ang aming staff para tulungan kayo.
+              {language === "en"
+                ? "Please remain calm. Our staff is on the way to help you."
+                : "Palihog kalma lang. Padulong na ang among mga kawani aron motabang kanimo."}
             </p>
           </div>
 
@@ -917,12 +991,12 @@ export default function CcRedflag({
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
                   src={receiptUrl}
-                  alt={`Emergency ticket ${alertData.ticketNumber}`}
+                  alt={language === "en" ? `Emergency ticket ${alertData.ticketNumber}` : `Tiket sa emerhensiya ${alertData.ticketNumber}`}
                   className="h-full w-auto object-contain"
                 />
               ) : (
                 <div className="flex h-full w-40 items-center justify-center px-3 text-center text-sm font-semibold text-gray-500">
-                  Preparing ticket…
+                  {language === "en" ? "Preparing ticket…" : "Giandam ang tiket…"}
                 </div>
               )}
             </div>
@@ -945,13 +1019,16 @@ export default function CcRedflag({
                 </div>
               )}
 
-              {receiptUrl && (printStatus === "printed" || printStatus === "error") && (
+              {receiptUrl && alertData.patient && (printStatus === "printed" || printStatus === "error") && (
                 <button
                   type="button"
-                  onClick={() => doPrint(receiptUrl, alertData)}
+                  onClick={() => {
+                    const patient = alertData.patient;
+                    if (patient) void doPrint(receiptUrl, { ...alertData, patient });
+                  }}
                   className="rounded-xl border border-red-300 bg-red-600 px-6 py-2 text-lg font-bold text-white hover:bg-red-500 active:bg-red-700 cursor-pointer"
                 >
-                  Print again
+                  {language === "en" ? "Print again" : "I-imprinta pag-usab"}
                 </button>
               )}
             </div>
@@ -961,7 +1038,9 @@ export default function CcRedflag({
 
       {/* FOOTER */}
       <footer className="w-full py-4 px-8 text-center text-cyan-300/60 text-sm border-t border-cyan-900">
-        BICA Outpatient Self-Service Kiosk • Northern Mindanao Medical Center
+        {language === "en"
+          ? "BICA Outpatient Self-Service Kiosk"
+          : "Kiosk sa Outpatient sa BICA"}
       </footer>
     </div>
   );

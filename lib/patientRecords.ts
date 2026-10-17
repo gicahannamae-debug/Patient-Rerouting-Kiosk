@@ -14,9 +14,11 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { ClinicOption } from "@/Component/primaryClinics";
+import type { NEWS2Result } from "@/lib/news2";
+import type { PatientAgeGroup } from "@/lib/patientDemographics";
 
 export type ClinicCode = "SUR" | "PED" | "OBG" | "IM" | "ER";
-export type PatientCategory = "URGENT" | "PRIORITY" | "REGULAR";
+export type PatientCategory = "EMERGENCY" | "URGENT" | "PRIORITY" | "REGULAR";
 export type PatientStatus = "waiting" | "serving" | "done";
 
 export interface PatientVitals {
@@ -39,9 +41,13 @@ export interface QueuePatient {
   ticketCode: string;
   name: string;
   age: number;
+  ageDisplay: string;
+  ageGroup: PatientAgeGroup;
   sex: "M" | "F";
+  contactNumber: string;
   chiefComplaints: PatientComplaint[];
   vitals: PatientVitals;
+  news2?: NEWS2Result;
   category: PatientCategory;
   clinic: ClinicCode;
   status: PatientStatus;
@@ -51,12 +57,17 @@ export interface QueuePatient {
 }
 
 export interface NewQueuePatient {
-  clinic: ClinicOption;
+  clinic: ClinicOption | "Emergency Dept.";
   name: string;
   age: number;
+  ageDisplay: string;
+  ageGroup: PatientAgeGroup;
   sex: "M" | "F";
+  contactNumber: string;
   complaint: PatientComplaint;
   vitals: PatientVitals;
+  news2: NEWS2Result;
+  category: PatientCategory;
 }
 
 export interface CreatedQueueTicket {
@@ -72,10 +83,16 @@ const CLINIC_CODES: Record<ClinicOption, ClinicCode> = {
   "OB-GYNE": "OBG",
   Pediatrics: "PED",
 };
+const EMERGENCY_CLINIC_CODE: ClinicCode = "ER";
 
 const VALID_CLINICS: ClinicCode[] = ["SUR", "PED", "OBG", "IM", "ER"];
-const VALID_CATEGORIES: PatientCategory[] = ["URGENT", "PRIORITY", "REGULAR"];
+const VALID_CATEGORIES: PatientCategory[] = ["EMERGENCY", "URGENT", "PRIORITY", "REGULAR"];
 const VALID_STATUSES: PatientStatus[] = ["waiting", "serving", "done"];
+const VALID_AGE_GROUPS: PatientAgeGroup[] = ["INFANT", "CHILD", "ADOLESCENT", "ADULT", "SENIOR"];
+
+function isPatientAgeGroup(value: unknown): value is PatientAgeGroup {
+  return typeof value === "string" && VALID_AGE_GROUPS.some(group => group === value);
+}
 
 function readTimestamp(value: unknown, fieldName: string): string {
   if (value instanceof Timestamp) return value.toDate().toISOString();
@@ -98,9 +115,16 @@ export function parseQueuePatient(id: string, data: DocumentData): QueuePatient 
     typeof data.ticketCode !== "string" ||
     typeof data.name !== "string" ||
     typeof data.age !== "number" ||
+    !Number.isInteger(data.age) ||
+    data.age < 0 ||
+    data.age > 150 ||
+    (data.ageDisplay !== undefined && typeof data.ageDisplay !== "string") ||
+    (data.ageGroup !== undefined && !isPatientAgeGroup(data.ageGroup)) ||
+    (data.contactNumber !== undefined && typeof data.contactNumber !== "string") ||
     (data.sex !== "M" && data.sex !== "F") ||
     !VALID_CLINICS.includes(data.clinic) ||
-    !VALID_CATEGORIES.includes(data.category) ||
+    typeof data.category !== "string" ||
+    !VALID_CATEGORIES.includes(data.category as PatientCategory) ||
     !VALID_STATUSES.includes(data.status) ||
     typeof data.queueNumber !== "number" ||
     !Array.isArray(data.chiefComplaints) ||
@@ -137,12 +161,54 @@ export function parseQueuePatient(id: string, data: DocumentData): QueuePatient 
     throw new Error(`Invalid patient record: ${id} has invalid blood pressure.`);
   }
 
+  let news2: NEWS2Result | undefined;
+  if (data.news2 !== undefined) {
+    const value = data.news2;
+    if (
+      typeof value !== "object" ||
+      value === null ||
+      typeof value.total !== "number" ||
+      typeof value.complete !== "boolean" ||
+      !Array.isArray(value.missingParameters) ||
+      !value.missingParameters.every((item: unknown) => typeof item === "string") ||
+      !Array.isArray(value.criticalParameters) ||
+      !value.criticalParameters.every((item: unknown) => typeof item === "string") ||
+      !["EMERGENCY", "URGENT", "PRIORITY", "REGULAR"].includes(value.route) ||
+      typeof value.components !== "object" ||
+      value.components === null
+    ) {
+      throw new Error(`Invalid patient record: ${id} has an invalid NEWS2 result.`);
+    }
+    const scoreValues = [
+      value.components.respiratoryRate,
+      value.components.oxygenSaturation,
+      value.components.systolicBloodPressure,
+      value.components.pulseRate,
+      value.components.consciousness,
+      value.components.temperature,
+      value.components.supplementalOxygen,
+    ];
+    if (!scoreValues.every((score: unknown) => score === null || (typeof score === "number" && Number.isInteger(score) && score >= 0 && score <= 3))) {
+      throw new Error(`Invalid patient record: ${id} has invalid NEWS2 parameter scores.`);
+    }
+    news2 = value as NEWS2Result;
+  }
+
   return {
     id,
     ticketCode: data.ticketCode,
     name: data.name,
     age: data.age,
+    ageDisplay: data.ageDisplay ?? `${data.age} ${data.age === 1 ? "year" : "years"}`,
+    ageGroup: data.ageGroup ?? (
+      data.age === 0 ? "INFANT"
+        : data.age <= 11 ? "CHILD"
+          : data.age <= 17 ? "ADOLESCENT"
+            : data.age <= 59 ? "ADULT"
+              : "SENIOR"
+    ),
     sex: data.sex,
+    contactNumber: data.contactNumber ?? "",
     chiefComplaints,
     vitals: {
       bp: data.vitals.bp,
@@ -151,7 +217,8 @@ export function parseQueuePatient(id: string, data: DocumentData): QueuePatient 
       temp: readNullableNumber(data.vitals.temp, "vitals.temp"),
       spo2: readNullableNumber(data.vitals.spo2, "vitals.spo2"),
     },
-    category: data.category,
+    ...(news2 ? { news2 } : {}),
+    category: data.category as PatientCategory,
     clinic: data.clinic,
     status: data.status,
     queueNumber: data.queueNumber,
@@ -161,7 +228,15 @@ export function parseQueuePatient(id: string, data: DocumentData): QueuePatient 
 }
 
 export async function createQueuePatient(input: NewQueuePatient): Promise<CreatedQueueTicket> {
-  const clinic = CLINIC_CODES[input.clinic];
+  const clinic = input.clinic === "Emergency Dept."
+    ? EMERGENCY_CLINIC_CODE
+    : CLINIC_CODES[input.clinic];
+  const categoryCode: Record<PatientCategory, string> = {
+    EMERGENCY: "E",
+    URGENT: "U",
+    PRIORITY: "P",
+    REGULAR: "R",
+  };
   const patientRef = doc(collection(db, "patients"));
   const counterRef = doc(db, "queueCounters", clinic);
   const arrivedAt = new Date();
@@ -175,7 +250,7 @@ export async function createQueuePatient(input: NewQueuePatient): Promise<Create
       throw new Error(`The ${input.clinic} queue has reached its daily capacity.`);
     }
 
-    ticketCode = `${clinic}-R-${String(queueNumber).padStart(3, "0")}`;
+    ticketCode = `${clinic}-${categoryCode[input.category]}-${String(queueNumber).padStart(3, "0")}`;
     transaction.set(counterRef, {
       clinic,
       current: queueNumber,
@@ -186,10 +261,14 @@ export async function createQueuePatient(input: NewQueuePatient): Promise<Create
       ticketCode,
       name: input.name,
       age: input.age,
+      ageDisplay: input.ageDisplay,
+      ageGroup: input.ageGroup,
       sex: input.sex,
+      contactNumber: input.contactNumber,
       chiefComplaints: [input.complaint],
       vitals: input.vitals,
-      category: "REGULAR",
+      news2: input.news2,
+      category: input.category,
       clinic,
       status: "waiting",
       queueNumber,

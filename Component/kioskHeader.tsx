@@ -1,18 +1,29 @@
 'use client';
 
 import React, { useState } from "react";
+import type { KioskLanguage } from "@/lib/kioskLanguage";
 
-const STEPS = [
-  "Welcome",
-  "Safety Check",
-  "Registration",
-  "Forms",
-  "Take Vital Signs",
-  "Complaints",
-  "Ticket",
-];
+const STEPS: Record<KioskLanguage, { label: string; index: number }[]> = {
+  en: [
+    { label: "Welcome", index: 0 },
+    { label: "Safety Check", index: 1 },
+    { label: "Take Vital Signs", index: 4 },
+    { label: "Registration", index: 5 },
+    { label: "Complaints", index: 6 },
+    { label: "Ticket", index: 7 },
+  ],
+  ceb: [
+    { label: "Maayong pag-abot", index: 0 },
+    { label: "Pagsusi sa Kaluwasan", index: 1 },
+    { label: "Pagsukod sa mga Vital Sign", index: 4 },
+    { label: "Pagparehistro", index: 5 },
+    { label: "Mga Reklamo", index: 6 },
+    { label: "Tiket", index: 7 },
+  ],
+};
 
 interface KioskHeaderProps {
+  language: KioskLanguage;
   activeStep: number;
   vitalPart?: number;
   onNavigateStep?: (step: number) => void;
@@ -21,6 +32,7 @@ interface KioskHeaderProps {
 }
 
 export default function KioskHeader({
+  language,
   activeStep,
   vitalPart,
   onNavigateStep,
@@ -28,6 +40,7 @@ export default function KioskHeader({
   onLogout,
 }: KioskHeaderProps) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const steps = STEPS[language];
 
   const circleState = (part: number): "done" | "current" | "future" => {
     if (activeStep > 4) return "done";
@@ -49,45 +62,16 @@ export default function KioskHeader({
           <div className="flex items-center gap-2">
             <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <p className="text-sm font-semibold tracking-wider uppercase text-cyan-900">
-              Outpatient Department (OPD) Kiosk
+              {language === "en" ? "Outpatient Department (OPD) Kiosk" : "Kiosk sa Departamento sa Outpatient (OPD)"}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-5 min-w-0">
-          {/* BACK BUTTON 10-14-2026 */ }
-        
-          {activeStep > 0 &&
-            activeStep !== 6 &&
-            onNavigateStep && (
-              <button
-                type="button"
-                onClick={() => {
-                  const confirmed = window.confirm(
-                    "Are you sure you want to go back?"
-                  );
-
-                  if (!confirmed) return;
-
-                  if (activeStep === 3 ) {
-                    onNavigateStep(0);
-                  } else {
-                    // All other steps → Previous step
-                    onNavigateStep(activeStep - 1);
-                  }
-                }}
-                className="flex shrink-0 items-center gap-2 rounded-full bg-cyan-950 px-4 py-2 font-extrabold text-yellow-50 transition-all duration-300 hover:bg-cyan-800 active:scale-95 cursor-pointer"
-                aria-label="Go back to previous step"
-              >
-                <span className="text-xl">←</span>
-                <span>Back</span>
-              </button>
-            )}
-
-          <ol aria-label="Kiosk progress" className="flex flex-wrap items-center justify-end gap-x-2 gap-y-2 text-sm">
-            {STEPS.map((label, index) => {
-              const isActive = index === activeStep;
-              const isPast = index < activeStep;
+          <ol aria-label={language === "en" ? "Kiosk progress" : "Pag-uswag sa kiosk"} className="flex flex-wrap items-center justify-end gap-x-2 gap-y-2 text-sm">
+            {steps.map(({ label, index: stepIndex }, index) => {
+              const isActive = stepIndex === activeStep;
+              const isPast = stepIndex < activeStep;
               return (
                 <React.Fragment key={label}>
                   {index > 0 && <li aria-hidden className="text-cyan-950/25 font-light select-none">|</li>}
@@ -103,15 +87,16 @@ export default function KioskHeader({
                     {isPast && onNavigateStep ? (
                       <button
                         type="button"
-                        onClick={() => onNavigateStep(index)}
-                        className="cursor-pointer hover:underline"
-                      >
-                        {label}
-                      </button>
+                      onClick={() => onNavigateStep(stepIndex)}
+                      aria-label={language === "en" ? `Go back to ${label}` : `Mobalik sa ${label}`}
+                      className="cursor-pointer rounded px-1 hover:bg-cyan-950/10 hover:underline focus-visible:outline focus-visible:outline-2 focus-visible:outline-cyan-700"
+                    >
+                      {label}
+                    </button>
                     ) : (
                       <span>{label}</span>
                     )}
-                    {index === 4 && (
+                    {stepIndex === 4 && (
                       <span className="flex items-center gap-1">
                         {[1, 2, 3].map(part => {
                           const state = circleState(part);
@@ -148,7 +133,7 @@ export default function KioskHeader({
               <button
                 type="button"
                 onClick={() => setMenuOpen(open => !open)}
-                aria-label="Menu"
+                aria-label={language === "en" ? "Menu" : "Menu"}
                 aria-expanded={menuOpen}
                 className="flex h-12 w-12 flex-col items-center justify-center gap-1.5 rounded-xl border border-cyan-950/30 bg-white hover:bg-cyan-50 transition-colors cursor-pointer"
               >
@@ -160,7 +145,7 @@ export default function KioskHeader({
                 <>
                   <button
                     type="button"
-                    aria-label="Close menu"
+                    aria-label={language === "en" ? "Close menu" : "Sirad-i ang menu"}
                     className="fixed inset-0 z-30 cursor-default"
                     onClick={() => setMenuOpen(false)}
                   />
@@ -173,7 +158,7 @@ export default function KioskHeader({
                       }}
                       className="block w-full px-4 py-3 text-left text-sm font-bold text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
                     >
-                      Operator Log out
+                      {language === "en" ? "Operator Log out" : "Pag-log out sa operator"}
                     </button>
                   </div>
                 </>
