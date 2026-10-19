@@ -19,7 +19,11 @@ import type { PatientAgeGroup } from "@/lib/patientDemographics";
 
 export type ClinicCode = "SUR" | "PED" | "OBG" | "IM" | "ER";
 export type PatientCategory = "EMERGENCY" | "URGENT" | "PRIORITY" | "REGULAR";
-export type PatientStatus = "waiting" | "serving" | "done";
+export type PatientStatus =
+  | "waiting"
+  | "serving"
+  | "done"
+  | "cancelled";
 
 export interface PatientVitals {
   bp: string | null;
@@ -87,7 +91,12 @@ const EMERGENCY_CLINIC_CODE: ClinicCode = "ER";
 
 const VALID_CLINICS: ClinicCode[] = ["SUR", "PED", "OBG", "IM", "ER"];
 const VALID_CATEGORIES: PatientCategory[] = ["EMERGENCY", "URGENT", "PRIORITY", "REGULAR"];
-const VALID_STATUSES: PatientStatus[] = ["waiting", "serving", "done"];
+const VALID_STATUSES: PatientStatus[] = [
+  "waiting",
+  "serving",
+  "done",
+  "cancelled",
+];
 const VALID_AGE_GROUPS: PatientAgeGroup[] = ["INFANT", "CHILD", "ADOLESCENT", "ADULT", "SENIOR"];
 
 function isPatientAgeGroup(value: unknown): value is PatientAgeGroup {
@@ -125,7 +134,7 @@ export function parseQueuePatient(id: string, data: DocumentData): QueuePatient 
     !VALID_CLINICS.includes(data.clinic) ||
     typeof data.category !== "string" ||
     !VALID_CATEGORIES.includes(data.category as PatientCategory) ||
-    !VALID_STATUSES.includes(data.status) ||
+   !VALID_STATUSES.includes(data.status as PatientStatus) ||
     typeof data.queueNumber !== "number" ||
     !Array.isArray(data.chiefComplaints) ||
     !data.vitals ||
