@@ -1,8 +1,22 @@
 'use client'
-import React, { useState, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { FirebaseError } from "firebase/app";
 import { onAuthStateChanged, signInWithEmailAndPassword, signOut } from "firebase/auth";
 import { auth } from "@/lib/firebase";
+import {
+  CalendarClock,
+  Search,
+  ShieldCheck,
+  Inbox,
+  ClipboardList,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Bell,
+  CheckCheck,
+  Volume2,
+  VolumeX,
+} from "lucide-react";
 import {
   getStaffClinic,
   persistPatientStatuses,
@@ -22,30 +36,61 @@ interface Clinic {
   isER?: boolean;
 }
 
+interface QueueNotification {
+  id: string;
+  ticketCode: string;
+  category: Category;
+  clinicCode: ClinicCode;
+  clinicName: string;
+  createdAt: string;
+  read: boolean;
+}
+
+interface PatientToast {
+  id: string;
+  ticketCode: string;
+  clinicName: string;
+  expiresAt: number;
+  exiting: boolean;
+}
+
+const NOTIFICATION_PAGE_SIZE = 10;
+const TOAST_LIFETIME_MS = 6000;
+const TOAST_FADE_MS = 500;
+const NOTIFICATION_STORAGE_PREFIX = "bica-queue-notifications-v1";
+
 // ─── Clinic Definitions (config, not patient data) ───────────────────────────
 
 const CLINICS: Clinic[] = [
-  { code: 'SUR', name: 'Surgery',           color: 'cyan'   },
-  { code: 'PED', name: 'Pediatrics',        color: 'green'  },
-  { code: 'OBG', name: 'OB-GYN',            color: 'pink'   },
-  { code: 'IM',  name: 'Internal Medicine', color: 'blue'   },
-  { code: 'ER',  name: 'Emergency Dept.',    color: 'red', isER: true },
+  { code: 'SUR', name: 'Surgery', color: 'cyan' },
+  { code: 'PED', name: 'Pediatrics', color: 'green' },
+  { code: 'OBG', name: 'OB-GYN', color: 'pink' },
+  { code: 'IM', name: 'Internal Medicine', color: 'blue' },
+  { code: 'ER', name: 'Emergency Dept.', color: 'red', isER: true },
 ];
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 // "SUR-U-001" -> "U-001", "ER-E-001" -> "E-001"
-function displayNumber(ticketCode: string): string {
-  return ticketCode.split('-').slice(1).join('-');
+
+function displayNumber(ticketCode: string | number | null | undefined): string {
+  const code = String(ticketCode ?? "");
+
+  if (!code) return "—";
+
+  return code.split("-").slice(1).join("-") || code;
 }
+
 
 const CAT_ORDER: Category[] = ['EMERGENCY', 'URGENT', 'PRIORITY', 'REGULAR'];
 
+
+
 const CAT_STYLE: Record<Category, { bg: string; text: string; badge: string; label: string }> = {
-  EMERGENCY: { bg: 'bg-red-800',   text: 'text-white', badge: 'bg-red-800 text-white',   label: 'EMERGENCY (E)' },
-  URGENT:   { bg: 'bg-red-600',    text: 'text-white', badge: 'bg-red-600 text-white',    label: 'URGENT (U)'   },
+  EMERGENCY: { bg: 'bg-red-800', text: 'text-white', badge: 'bg-red-800 text-white', label: 'EMERGENCY (E)' },
+  URGENT: { bg: 'bg-red-600', text: 'text-white', badge: 'bg-red-600 text-white', label: 'URGENT (U)' },
   PRIORITY: { bg: 'bg-orange-400', text: 'text-white', badge: 'bg-orange-400 text-white', label: 'PRIORITY (P)' },
-  REGULAR:  { bg: 'bg-green-500',  text: 'text-white', badge: 'bg-green-500 text-white',  label: 'REGULAR (R)'  },
+  REGULAR: { bg: 'bg-green-500', text: 'text-white', badge: 'bg-green-500 text-white', label: 'REGULAR (R)' },
 };
 
 function sortQueue(patients: Patient[]): Patient[] {
@@ -57,16 +102,10 @@ function sortQueue(patients: Patient[]): Patient[] {
   });
 }
 
-// If nobody is being served in this clinic, the next waiting patient becomes "serving"
-function promoteNext(list: Patient[], clinic: ClinicCode): Patient[] {
-  if (list.some(p => p.clinic === clinic && p.status === 'serving')) return list;
-  const next = sortQueue(list.filter(p => p.clinic === clinic && p.status === 'waiting'))[0];
-  if (!next) return list;
-  return list.map(p => (p.id === next.id ? { ...p, status: 'serving' as const } : p));
-}
-
+// Queue entries remain waiting until clinic staff explicitly call the next patient.
+// This avoids silently treating queue order as a clinical decision.
 function promoteAll(list: Patient[]): Patient[] {
-  return CLINICS.reduce((acc, c) => promoteNext(acc, c.code), list);
+  return list;
 }
 
 function now(): string {
@@ -86,15 +125,43 @@ function firstComplaint(p: Patient): string {
   return p.chiefComplaints[0]?.complaint ?? '—';
 }
 
+function queueStatusLabel(status: string | undefined): string {
+  switch (status) {
+    case 'waiting': return 'Open';
+    case 'serving': return 'In Progress';
+    case 'done': return 'Closed';
+    case 'cancelled': return 'Cancelled';
+    default: return 'Open';
+  }
+}
+
+function queueStatusClass(status: string | undefined): string {
+  switch (status) {
+    case 'waiting': return 'border-cyan-500/40 bg-cyan-950/50 text-cyan-200';
+    case 'serving': return 'border-emerald-500/40 bg-emerald-950/50 text-emerald-200';
+    case 'done': return 'border-slate-500/50 bg-slate-800 text-slate-300';
+    case 'cancelled': return 'border-rose-500/40 bg-rose-950/50 text-rose-200';
+    default: return 'border-cyan-500/40 bg-cyan-950/50 text-cyan-200';
+  }
+}
+
+function QueueStatusBadge({ status }: { status: string | undefined }) {
+  return (
+    <span className={`inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-black uppercase tracking-wider ${queueStatusClass(status)}`}>
+      {queueStatusLabel(status)}
+    </span>
+  );
+}
+
 // ─── Small components ─────────────────────────────────────────────────────────
 
 function VitalsGrid({ vitals, large = false }: { vitals?: Vitals | null; large?: boolean }) {
   const items = [
-    { label: 'BP',   value: vitals?.bp ?? '—',                                   unit: 'mmHg' },
-    { label: 'HR',   value: vitals?.hr != null ? String(vitals.hr) : '—',        unit: 'bpm'  },
-    { label: 'RR',   value: vitals?.rr != null ? String(vitals.rr) : '—',        unit: '/min' },
-    { label: 'Temp', value: vitals?.temp != null ? vitals.temp.toFixed(1) : '—', unit: '°C'   },
-    { label: 'SpO₂', value: vitals?.spo2 != null ? String(vitals.spo2) : '—',    unit: '%'    },
+    { label: 'BP', value: vitals?.bp ?? '—', unit: 'mmHg' },
+    { label: 'HR', value: vitals?.hr != null ? String(vitals.hr) : '—', unit: 'bpm' },
+    { label: 'RR', value: vitals?.rr != null ? String(vitals.rr) : '—', unit: '/min' },
+    { label: 'Temp', value: vitals?.temp != null ? vitals.temp.toFixed(1) : '—', unit: '°C' },
+    { label: 'SpO₂', value: vitals?.spo2 != null ? String(vitals.spo2) : '—', unit: '%' },
   ];
   return (
     <div className={`grid grid-cols-2 sm:grid-cols-5 ${large ? 'gap-3' : 'gap-2'}`}>
@@ -119,130 +186,543 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-// Compact card for waiting patients
-function CompactCard({ patient }: { patient: Patient }) {
+// Expandable service-desk row for pending patients
+
+function CompactCard({
+  patient,
+  onSelect,
+  onCall,
+  isServing,
+  isNew,
+}: {
+  patient: Patient;
+  onSelect: (patient: Patient) => void;
+  onCall: (patient: Patient) => void;
+  isServing: boolean;
+  isNew: boolean;
+}) {
   const cat = CAT_STYLE[patient.category];
-  const extra = patient.chiefComplaints.length - 1;
+
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2">
-      <span className={`shrink-0 rounded-lg px-2.5 py-1 text-xs font-bold tracking-wider ${cat.badge}`}>
-        {displayNumber(patient.ticketCode)}
-      </span>
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-white">{patient.name}</p>
-        <p className="truncate text-xs text-slate-400">
-          {patient.ageDisplay} · {patient.ageGroup} · {patient.sex} · {firstComplaint(patient)}
-          {extra > 0 ? ` +${extra}` : ''}
-          {patient.news2 ? ` · NEWS2 ${patient.news2.total} (Partial)` : ''}
-        </p>
-        {patient.contactNumber && (
-          <p className="truncate text-xs text-slate-500">{patient.contactNumber}</p>
-        )}
+    <div className={`rounded-2xl border transition duration-300 ${isNew ? 'border-emerald-400 bg-emerald-950/35 ring-1 ring-emerald-400/40 shadow-lg shadow-emerald-950/20' : 'border-slate-700 bg-slate-800/60 hover:border-cyan-600'}`}>
+      <div className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center">
+        <button
+          type="button"
+          onClick={() => onSelect(patient)}
+          className="flex min-w-0 flex-1 items-center gap-3 text-left"
+          aria-label={`View details for ${patient.name}`}
+        >
+          <span className="flex shrink-0 flex-col items-center gap-1.5">
+            <span className={`rounded-lg px-3 py-2 text-xs font-black ${cat.badge}`}>
+              {displayNumber(patient.ticketCode)}
+            </span>
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <p className="truncate font-bold text-white">{patient.name}</p>
+              {isNew && <span className="rounded-full border border-emerald-400/50 bg-emerald-400/15 px-2 py-0.5 text-[10px] font-black uppercase tracking-wider text-emerald-300">New</span>}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs text-slate-400">
+              <span>{patient.ageDisplay}</span>
+              <span className="text-slate-600">·</span>
+              <span>{patient.sex}</span>
+              <span className="text-slate-600">·</span>
+              <span className="min-w-0">{firstComplaint(patient)}</span>
+              <span className="text-slate-600">·</span>
+              <span className="text-slate-500">
+                Created {formatDateTime(patient.arrivedAt)}
+              </span>
+              <span className="text-slate-600">·</span>
+              <span className="text-[11px] text-slate-500">
+                Status: {queueStatusLabel(patient.status)}
+              </span>
+            </div>
+
+          </div>
+
+        
+        </button>
+
+        <button
+          type="button"
+          onClick={() => onCall(patient)}
+
+          disabled={isServing}
+          className="shrink-0 rounded-xl bg-cyan-600 px-4 py-2.5 text-sm font-bold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400"
+        >
+          {isServing ? "Another patient is being served" : "Call patient"}
+        </button>
+     
       </div>
     </div>
   );
 }
 
+
+
+function PatientDetailsPopup({
+  patient,
+  clinics,
+  minimized,
+  onMinimize,
+  onClose,
+  onCall,
+  isServing,
+  onFinish,
+  onForward,
+  onCancel
+}: {
+  patient: Patient;
+  clinics: Clinic[];
+  minimized: boolean;
+  onMinimize: () => void;
+  onClose: () => void;
+  onCall: () => void;
+  isServing: boolean;
+  
+  onCancel: (patient: Patient) => void;
+  onFinish: () => void;
+  onForward: (destination: ClinicCode, note: string) => void;
+}) {
+  const [destination, setDestination] = useState("");
+  const [handoverNote, setHandoverNote] = useState("");
+  const [confirmTransfer, setConfirmTransfer] = useState(false);
+  
+
+
+  const cat = CAT_STYLE[patient.category];
+
+  if (minimized) {
+    return (
+      <div className="fixed bottom-5 right-5 z-50 w-[min(380px,calc(100vw-2rem))] overflow-hidden rounded-2xl border border-cyan-700 bg-slate-950 shadow-2xl ring-1 ring-cyan-500/10">
+        <div className="flex items-center gap-3 border-b border-cyan-900/70 bg-cyan-950/60 p-4">
+          <span className="flex shrink-0 flex-col items-center gap-1.5">
+            <span className={`rounded-xl px-3 py-2 text-sm font-black tracking-wider ${cat.badge}`}>
+              {displayNumber(patient.ticketCode)}
+            </span>
+            <QueueStatusBadge status={patient.status} />
+          </span>
+          <div className="min-w-0 flex-1">
+            <p className="truncate font-bold text-white">{patient.name}</p>
+            <p className="text-xs text-slate-400">Patient details minimized</p>
+          </div>
+          <button
+            type="button"
+            onClick={onMinimize}
+            className="rounded-lg bg-cyan-700 px-3 py-2 text-sm font-bold text-white hover:bg-cyan-600"
+          >
+            Restore
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close patient details"
+            className="rounded-lg px-2 py-2 text-slate-400 hover:bg-slate-800 hover:text-white"
+          >
+            ✕
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm sm:p-6"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="patient-popup-title"
+    >
+      <section className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-cyan-800/80 bg-slate-950 shadow-2xl shadow-black/40 ring-1 ring-cyan-500/10">
+        <header className="flex items-center gap-3 border-b border-cyan-800/70 bg-gradient-to-r from-cyan-950 via-slate-950 to-slate-950 p-4 sm:p-5">
+          <span className="flex shrink-0 flex-col items-center gap-1.5">
+            <span className={`rounded-2xl px-4 py-3 text-2xl font-black tracking-widest shadow-lg ${cat.badge}`}>
+              {displayNumber(patient.ticketCode)}
+            </span>
+            <QueueStatusBadge status={patient.status} />
+          </span>
+
+          <div className="min-w-0 flex-1">
+            <h2 id="patient-popup-title" className="truncate text-xl font-black text-white">
+              {patient.name}
+            </h2>
+            <p className="mt-1 text-sm text-slate-300">
+              {cat.label} · {patient.ageDisplay} · {patient.sex}
+            </p>
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-cyan-400">Patient details</p>
+          </div>
+
+          <button
+            type="button"
+            onClick={onMinimize}
+            className="rounded-xl border border-slate-600 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800"
+          >
+            Minimize
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close popup"
+            className="rounded-xl px-3 py-2 text-lg text-slate-400 hover:bg-slate-800 hover:text-white"
+          >
+            ✕
+          </button>
+        </header>
+
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:space-y-5 sm:p-5">
+          <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-700 bg-slate-900/80 p-3 sm:grid-cols-4 sm:p-4">
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Age group</p>
+              <p className="mt-1 font-bold text-white">{patient.ageGroup || "—"}</p>
+            </div>
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Contact</p>
+              <p className="mt-1 break-words font-bold text-white">{patient.contactNumber || "—"}</p>
+            </div>
+            <div className="col-span-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Arrived at</p>
+              <p className="mt-1 font-bold text-white">
+                {formatDateTime(patient.arrivedAt)}
+              </p>
+            </div>
+          </div>
+
+          <section className="overflow-hidden rounded-2xl border border-amber-800/70 bg-slate-900/70">
+            <div className="flex items-center gap-2 border-b border-amber-900/60 bg-amber-950/30 px-4 py-3">
+              <span className="h-5 w-1 rounded-full bg-amber-400" />
+              <h3 className="font-black text-white">Chief Complaints</h3>
+              <span className="ml-auto rounded-full border border-amber-800/70 bg-amber-950/50 px-2.5 py-1 text-xs font-bold text-amber-200">{patient.chiefComplaints.length} recorded</span>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[500px] text-left text-sm">
+                <thead className="bg-slate-800/90 text-xs uppercase tracking-wider text-slate-400">
+                  <tr>
+                    <th className="px-3 py-2.5">Complaint</th>
+                    <th className="p-3">Duration</th>
+                    <th className="p-3">Severity</th>
+                    <th className="p-3">Location</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {patient.chiefComplaints.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-5 text-center text-slate-400">
+                        No complaints recorded.
+                      </td>
+                    </tr>
+                  ) : patient.chiefComplaints.map((c, i) => (
+                    <tr key={i} className="border-t border-slate-800 text-slate-200">
+                      <td className="px-3 py-3">{c.complaint || "—"}</td>
+                      <td className="p-3">{c.duration || "—"}</td>
+                      <td className="p-3">{c.severity || "—"}</td>
+                      <td className="p-3">{c.location || "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="overflow-hidden rounded-2xl border border-cyan-800/70 bg-slate-900/70">
+            <div className="flex items-center gap-2 border-b border-cyan-900/70 bg-cyan-950/30 px-4 py-3">
+              <span className="h-5 w-1 rounded-full bg-cyan-400" />
+              <h3 className="font-black text-white">Vital Signs</h3>
+              <span className="ml-auto text-xs font-semibold text-cyan-300">Clinical assessment</span>
+            </div>
+            <div className="p-3 sm:p-4">
+              <VitalsGrid vitals={patient.vitals} large />
+              {patient.news2 && (
+                <div className="mt-3 rounded-xl border border-cyan-800/80 bg-cyan-950/30 p-3 sm:p-4">
+                  <p className="font-bold text-cyan-300">
+                    NEWS2: {patient.news2.total} · {patient.news2.route}
+                  </p>
+                  <p className="mt-2 text-sm text-slate-300">
+                    {patient.news2.complete ? "Assessment complete" : "Partial assessment"}.
+                    {" "}Respiratory rate: {patient.news2.components.respiratoryRate ?? "—"}.
+                    {" "}Oxygen saturation: {patient.news2.components.oxygenSaturation ?? "—"}.
+                    {" "}Systolic BP: {patient.news2.components.systolicBloodPressure ?? "—"}.
+                    {" "}Pulse: {patient.news2.components.pulseRate ?? "—"}.
+                    {" "}Temperature: {patient.news2.components.temperature ?? "—"}.
+                  </p>
+                  {patient.news2.criticalParameters.length > 0 && (
+                    <p className="mt-2 font-bold text-red-300">
+                      Critical parameters: {patient.news2.criticalParameters.join(", ")}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-cyan-800/70 bg-slate-900/70 p-4">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="h-5 w-1 rounded-full bg-cyan-400" />
+              <h3 className="font-black text-white">Forward to another department</h3>
+            </div>
+            <p className="mt-1 text-sm text-slate-400">
+              Choose the receiving clinic and include any necessary clinical handover information.
+            </p>
+
+            <label className="mt-4 block text-sm font-semibold text-slate-300">
+              Destination department
+              <select
+                value={destination}
+                onChange={e => {
+                  setDestination(e.target.value);
+                  setConfirmTransfer(false);
+                }}
+                className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 px-3 py-3 text-white"
+              >
+                <option value="">Select department</option>
+                {clinics.filter(c => c.code !== patient.clinic).map(c => (
+                  <option key={c.code} value={c.code}>{c.name}</option>
+                ))}
+              </select>
+            </label>
+
+            <label className="mt-4 block text-sm font-semibold text-slate-300">
+              Handover note (optional)
+              <textarea
+                value={handoverNote}
+                onChange={e => setHandoverNote(e.target.value)}
+                rows={3}
+                maxLength={1000}
+                placeholder="Reason for referral or information for the receiving team"
+                className="mt-2 w-full rounded-xl border border-slate-600 bg-slate-900 p-3 text-white placeholder:text-slate-500"
+              />
+            </label>
+
+            {confirmTransfer ? (
+              <div className="mt-4 rounded-xl border border-amber-700 bg-amber-950/40 p-3">
+                <p className="text-sm text-amber-200">
+                  Confirm transfer of ticket {displayNumber(patient.ticketCode)}?
+                  Ensure the receiving department is appropriate and follow your hospital's referral protocol.
+                </p>
+                <div className="mt-3 flex flex-wrap justify-end gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setConfirmTransfer(false)}
+                    className="rounded-lg border border-slate-600 px-4 py-2 text-sm text-white"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (destination) {
+                        onForward(destination as ClinicCode, handoverNote.trim());
+                      }
+                    }}
+                    className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-bold text-white hover:bg-amber-500"
+                  >
+                    Confirm transfer
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={!destination}
+                onClick={() => setConfirmTransfer(true)}
+                className="mt-4 rounded-xl bg-amber-600 px-4 py-3 text-sm font-bold text-white hover:bg-amber-500 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                Forward patient →
+              </button>
+            )}
+          </section>
+        </div>
+
+        <footer className="flex flex-wrap justify-end gap-3 border-t border-cyan-900/70 bg-slate-950 p-4">
+            <button
+          type="button"
+          onClick={() => onCancel(patient)}
+          className="shrink-0 rounded-xl border border-rose-500/50 bg-rose-950/40 px-4 py-2.5 text-sm font-bold text-rose-200 transition hover:bg-rose-900/60"
+          aria-label={`Cancel ticket ${displayNumber(patient.ticketCode)}`}
+        >
+          Cancel Number
+        </button>
+
+          <button
+            type="button"
+            onClick={onCall}
+
+            disabled={isServing || patient.status !== "waiting"}
+            className="rounded-xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white hover:bg-cyan-500 disabled:cursor-not-allowed disabled:opacity-40"
+          >
+            {patient.status === "serving"
+              ? "Currently serving"
+              : isServing
+                ? "Another patient is being served"
+                : "Call patient"}
+          </button>
+        </footer>
+      </section>
+    </div>
+  );
+}
+
+
 // Large card for the patient being served. Shows the titles with "—" when empty.
-function NowServingBanner({ patient, onFinish }: { patient: Patient | null; onFinish: () => void }) {
+function NowServingBanner({ patient, onFinish, onCallNext, hasWaiting }: {
+  patient: Patient | null;
+  onFinish: () => void;
+  onCallNext: () => void;
+  hasWaiting: boolean;
+}) {
+  const [expanded, setExpanded] = useState(true);
   const cat = patient ? CAT_STYLE[patient.category] : null;
   const complaints = patient?.chiefComplaints ?? [];
 
   return (
-    <div className="w-full rounded-3xl bg-cyan-950 border border-cyan-400 ring-2 ring-cyan-400 p-6 sm:p-8">
-      <p className={`text-xs font-bold tracking-widest text-cyan-400 mb-4 ${patient ? 'animate-pulse' : ''}`}>
-        {patient ? '● NOW SERVING' : 'NOW SERVING'}
-      </p>
-
-      {/* Row 1: patient number + basic info */}
-      <div className="flex flex-col lg:flex-row lg:items-center gap-6">
-        <div className={`text-center rounded-2xl ${cat?.bg ?? 'bg-slate-700'} px-8 py-6 min-w-[170px]`}>
-          <p className="text-5xl font-black text-white tracking-widest">
-            {patient ? displayNumber(patient.ticketCode) : '—'}
+    <div className="w-full rounded-3xl border border-cyan-700 bg-cyan-950/80 p-5 sm:p-7">
+      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <p className={`text-xs font-bold tracking-widest text-cyan-400 ${patient ? 'animate-pulse' : ''}`}>
+            {patient ? '● NOW SERVING' : 'READY TO CALL'}
           </p>
-          <p className="mt-2 text-xs font-bold text-white/80">{cat?.label ?? 'PATIENT NUMBER'}</p>
-        </div>
-
-        <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="col-span-2">
-            <Field label="Patient Name" value={patient?.name ?? '—'} />
-          </div>
-          <Field label="Age" value={patient?.ageDisplay ?? '—'} />
-          <Field label="Age Group" value={patient?.ageGroup ?? '—'} />
-          <Field label="Sex" value={patient?.sex ?? '—'} />
-          <div className="col-span-2">
-            <Field label="Contact Number" value={patient?.contactNumber || '—'} />
-          </div>
-          <div className="col-span-2 sm:col-span-4">
-            <p className="text-xs text-slate-400 uppercase tracking-wider">Arrived At</p>
-            <p className="text-lg font-bold text-white">{patient?.arrivedAt ?? '—'}</p>
-          </div>
-        </div>
-      </div>
-
-      {/* Row 2: complaints table */}
-      <div className="mt-8">
-        <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Chief Complaints</p>
-        <div className="overflow-x-auto rounded-2xl border border-cyan-800/60">
-          <div className="min-w-[560px]">
-            <div className="grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4 bg-cyan-900/60 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-cyan-300">
-              <span>Complaint</span>
-              <span>Duration</span>
-              <span>Severity</span>
-              <span>Location</span>
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <span className={`rounded-xl px-4 py-2 text-2xl font-black tracking-widest text-white ${cat?.bg ?? 'bg-slate-700'}`}>
+              {patient ? displayNumber(patient.ticketCode) : '—'}
+            </span>
+            <div>
+              <p className="text-lg font-bold text-white">{patient?.name ?? 'No patient currently being served'}</p>
+              <p className="text-sm text-slate-300">{patient ? `${cat?.label ?? patient.category} · ${patient.ageDisplay} · ${patient.sex}` : 'Select Call next when clinic staff are ready to receive a patient.'}</p>
             </div>
-            {complaints.length === 0 ? (
-              <div className="grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4 px-4 py-3 text-base text-slate-500">
-                <span>—</span><span>—</span><span>—</span><span>—</span>
-              </div>
-            ) : (
-              complaints.map((c, i) => (
-                <div
-                  key={i}
-                  className="grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4 border-t border-cyan-800/40 px-4 py-3 text-base text-white"
-                >
-                  <span className="font-semibold">{c.complaint || '—'}</span>
-                  <span>{c.duration || '—'}</span>
-                  <span>{c.severity !== '' && c.severity != null ? c.severity : '—'}</span>
-                  <span>{c.location || '—'}</span>
-                </div>
-              ))
-            )}
           </div>
         </div>
+        <button
+          type="button"
+          onClick={() => setExpanded(value => !value)}
+          aria-expanded={expanded}
+          className="inline-flex shrink-0 items-center justify-center gap-2 rounded-xl border border-cyan-700 bg-cyan-900/60 px-4 py-2 text-sm font-bold text-cyan-100 hover:bg-cyan-800/70"
+        >
+          {expanded ? 'Minimize details' : 'Expand patient details'}
+          <span aria-hidden="true">{expanded ? '⌃' : '⌄'}</span>
+        </button>
       </div>
 
-      {/* Row 3: vitals */}
-      <div className="mt-6">
-        <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Vitals</p>
-        <VitalsGrid vitals={patient?.vitals} large />
-        {patient?.news2 && (
-          <div className="mt-3 rounded-xl border border-cyan-800/60 bg-slate-900/60 px-4 py-3">
-            <p className="font-bold text-cyan-300">
-              NEWS2 {patient.news2.complete ? "Complete" : "Partial"}: {patient.news2.total} · {patient.news2.route}
-            </p>
-            <p className="mt-1 text-xs text-slate-300">
-              RR {patient.news2.components.respiratoryRate ?? "—"} · SpO₂ {patient.news2.components.oxygenSaturation ?? "—"} ·
-              SBP {patient.news2.components.systolicBloodPressure ?? "—"} · Pulse {patient.news2.components.pulseRate ?? "—"} ·
-              Consciousness {patient.news2.components.consciousness ?? "—"} · Temp {patient.news2.components.temperature ?? "—"} ·
-              Oxygen {patient.news2.components.supplementalOxygen ?? "—"}
-            </p>
-            {patient.news2.criticalParameters.length > 0 && (
-              <p className="mt-1 text-sm font-bold text-red-300">
-                Score of 3: {patient.news2.criticalParameters.join(", ")}
+      {expanded && (
+        <div className="space-y-6">
+          {/* Row 1: patient number + basic info */}
+          <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+            <div className={`text-center rounded-2xl ${cat?.bg ?? 'bg-slate-700'} px-8 py-6 min-w-[170px]`}>
+              <p className="text-5xl font-black text-white tracking-widest">
+                {patient ? displayNumber(patient.ticketCode) : '—'}
               </p>
+              <p className="mt-2 text-xs font-bold text-white/80">{cat?.label ?? 'PATIENT NUMBER'}</p>
+            </div>
+
+            <div className="flex-1 grid grid-cols-2 sm:grid-cols-4 gap-4">
+              <div className="col-span-2">
+                <Field label="Patient Name" value={patient?.name ?? '—'} />
+              </div>
+              <Field label="Age" value={patient?.ageDisplay ?? '—'} />
+              <Field label="Age Group" value={patient?.ageGroup ?? '—'} />
+              <Field label="Sex" value={patient?.sex ?? '—'} />
+              <div className="col-span-2">
+                <Field label="Contact Number" value={patient?.contactNumber || '—'} />
+              </div>
+              <div className="col-span-2 sm:col-span-4">
+                <p className="text-xs text-slate-400 uppercase tracking-wider">
+                  Arrived At
+                </p>
+                <p className="text-lg font-bold text-white">
+                  {patient?.arrivedAt
+                    ? new Date(patient.arrivedAt).toLocaleString("en-PH", {
+                      timeZone: "Asia/Manila",
+                      month: "long",
+                      day: "2-digit",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: true,
+                    })
+                    : "—"}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Row 2: complaints table */}
+          <div className="mt-8">
+            <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Chief Complaints</p>
+            <div className="overflow-x-auto rounded-2xl border border-cyan-800/60">
+              <div className="min-w-[560px]">
+                <div className="grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4 bg-cyan-900/60 px-4 py-2 text-[11px] font-bold uppercase tracking-wider text-cyan-300">
+                  <span>Complaint</span>
+                  <span>Duration</span>
+                  <span>Severity</span>
+                  <span>Location</span>
+                </div>
+                {complaints.length === 0 ? (
+                  <div className="grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4 px-4 py-3 text-base text-slate-500">
+                    <span>—</span><span>—</span><span>—</span><span>—</span>
+                  </div>
+                ) : (
+                  complaints.map((c, i) => (
+                    <div
+                      key={i}
+                      className="grid grid-cols-[2fr_1fr_1fr_1.5fr] gap-4 border-t border-cyan-800/40 px-4 py-3 text-base text-white"
+                    >
+                      <span className="font-semibold">{c.complaint || '—'}</span>
+                      <span>{c.duration || '—'}</span>
+                      <span>{c.severity !== '' && c.severity != null ? c.severity : '—'}</span>
+                      <span>{c.location || '—'}</span>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Row 3: vitals */}
+          <div className="mt-6">
+            <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Vitals</p>
+            <VitalsGrid vitals={patient?.vitals} large />
+            {patient?.news2 && (
+              <div className="mt-3 rounded-xl border border-cyan-800/60 bg-slate-900/60 px-4 py-3">
+                <p className="font-bold text-cyan-300">
+                  NEWS2 {patient.news2.complete ? "Complete" : "Partial"}: {patient.news2.total} · {patient.news2.route}
+                </p>
+                <p className="mt-1 text-xs text-slate-300">
+                  RR {patient.news2.components.respiratoryRate ?? "—"} · SpO₂ {patient.news2.components.oxygenSaturation ?? "—"} ·
+                  SBP {patient.news2.components.systolicBloodPressure ?? "—"} · Pulse {patient.news2.components.pulseRate ?? "—"} ·
+                  Consciousness {patient.news2.components.consciousness ?? "—"} · Temp {patient.news2.components.temperature ?? "—"} ·
+                  Oxygen {patient.news2.components.supplementalOxygen ?? "—"}
+                </p>
+                {patient.news2.criticalParameters.length > 0 && (
+                  <p className="mt-1 text-sm font-bold text-red-300">
+                    Score of 3: {patient.news2.criticalParameters.join(", ")}
+                  </p>
+                )}
+              </div>
             )}
           </div>
-        )}
-      </div>
 
-      <div className="mt-8 flex justify-end">
+        </div>
+      )}
+
+      <div className="mt-5 flex flex-wrap justify-end gap-3">
+        {!patient && (
+          <button
+            type="button"
+            onClick={onCallNext}
+            disabled={!hasWaiting}
+            className="rounded-2xl bg-cyan-600 px-8 py-3 text-base font-bold text-white transition-colors hover:bg-cyan-500 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-500"
+          >
+            Call next patient
+          </button>
+        )}
         <button
+          type="button"
           onClick={onFinish}
           disabled={!patient}
           className="rounded-2xl bg-emerald-600 hover:bg-emerald-500 disabled:bg-slate-700 disabled:text-slate-500 disabled:cursor-not-allowed px-8 py-3 text-base font-bold text-white transition-colors"
         >
-          Finish
+          Finish visit
         </button>
       </div>
     </div>
@@ -251,14 +731,71 @@ function NowServingBanner({ patient, onFinish }: { patient: Patient | null; onFi
 
 // ─── Clinic Queue ─────────────────────────────────────────────────────────────
 
-function ClinicQueue({ clinic, allPatients, onUpdate }: {
+function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
   clinic: Clinic;
   allPatients: Patient[];
   onUpdate: (patients: Patient[]) => void;
+  newlyAddedPatientIds: Set<string>;
 }) {
-  const myPatients = allPatients.filter(p => p.clinic === clinic.code && p.status !== 'done');
+  const myPatients = allPatients.filter(p => p.clinic === clinic.code && (p.status === 'waiting' || p.status === 'serving'));
   const serving = myPatients.find(p => p.status === 'serving') ?? null;
   const waiting = sortQueue(myPatients.filter(p => p.status === 'waiting'));
+  const [searchTerm, setSearchTerm] = useState('');
+  const [categoryFilter, setCategoryFilter] = useState<'ALL' | Category>('ALL');
+  const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST' | 'PRIORITY'>('NEWEST');
+  const [confirmFinish, setConfirmFinish] = useState<Patient | null>(null);
+  const [confirmCancel, setConfirmCancel] = useState<Patient | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [popupMinimized, setPopupMinimized] = useState(false);
+
+  const [transferNotice, setTransferNotice] = useState("");
+  const [currentDateTime, setCurrentDateTime] = useState<Date | null>(null);
+  useEffect(() => {
+    const updateDateTime = () => {
+      setCurrentDateTime(new Date());
+    };
+
+    updateDateTime();
+
+    const intervalId = setInterval(updateDateTime, 1000);
+
+    return () => clearInterval(intervalId);
+  }, []);
+
+  const popupPatient = selectedPatient
+    ? allPatients.find(p => p.id === selectedPatient.id) ?? null
+    : null;
+
+
+  const matchingWaiting = waiting.filter(patient => {
+    const term = searchTerm.trim().toLowerCase();
+    const matchesSearch = !term || [
+      patient.name,
+      patient.ticketCode,
+      displayNumber(patient.ticketCode),
+      patient.contactNumber ?? '',
+      patient.ageDisplay,
+      patient.ageGroup,
+      patient.sex,
+      ...patient.chiefComplaints.map(item => item.complaint ?? ''),
+    ].some(value => String(value ?? '').toLowerCase().includes(term));
+    const matchesCategory = categoryFilter === 'ALL' || patient.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  // Latest arrivals are shown first by default. Priority sorting is available when staff need it.
+  const filteredWaiting = [...matchingWaiting].sort((a, b) => {
+    if (sortOrder === 'PRIORITY') {
+      const categoryDifference = CAT_ORDER.indexOf(a.category) - CAT_ORDER.indexOf(b.category);
+      return categoryDifference || a.queueNumber - b.queueNumber;
+    }
+    const aTime = new Date(a.arrivedAt || 0).getTime();
+    const bTime = new Date(b.arrivedAt || 0).getTime();
+    const validATime = Number.isFinite(aTime) ? aTime : 0;
+    const validBTime = Number.isFinite(bTime) ? bTime : 0;
+    const difference = sortOrder === 'NEWEST' ? validBTime - validATime : validATime - validBTime;
+    return difference || b.queueNumber - a.queueNumber;
+  });
 
   const grouped: Record<Category, Patient[]> = {
     EMERGENCY: waiting.filter(p => p.category === 'EMERGENCY'),
@@ -278,89 +815,804 @@ function ClinicQueue({ clinic, allPatients, onUpdate }: {
     e2: myPatients.filter(p => p.category !== 'EMERGENCY' && p.category !== 'URGENT').length,
   };
 
-  // Finish the current patient; the next one in line is promoted automatically
-  function handleFinish(patient: Patient) {
+  function formatCreatedDateTime(value: unknown): string {
+    if (!value) return "Date unavailable";
+
+    let date: Date;
+
+    if (value instanceof Date) {
+      date = value;
+    } else if (typeof value === "string" || typeof value === "number") {
+      date = new Date(value);
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      "toDate" in value &&
+      typeof value.toDate === "function"
+    ) {
+      date = value.toDate();
+    } else {
+      return "Date unavailable";
+    }
+
+    if (Number.isNaN(date.getTime())) return "Date unavailable";
+
+    return date.toLocaleString("en-PH", {
+      month: "short",
+      day: "2-digit",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    });
+  }
+
+  const [currentPage, setCurrentPage] = useState(1);
+
+  const PAGE_SIZE = 8;
+
+  const totalPages = Math.max(
+    1,
+    Math.ceil(filteredWaiting.length / PAGE_SIZE)
+  );
+
+  const paginatedWaiting = filteredWaiting.slice(
+    (currentPage - 1) * PAGE_SIZE,
+    currentPage * PAGE_SIZE
+  );
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, categoryFilter, sortOrder]);
+
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
+
+
+  function handleReturnToQueue(patient: Patient) {
+    const currentPatient = allPatients.find(p => p.id === patient.id);
+
+    if (
+      !currentPatient ||
+      currentPatient.status !== "serving" ||
+      currentPatient.clinic !== clinic.code
+    ) {
+      return;
+    }
+
     onUpdate(
       allPatients.map(p =>
-        p.id === patient.id
-          ? { ...p, status: 'done' as const, completedAt: new Date().toISOString() }
+        p.id === currentPatient.id
+          ? { ...p, status: "waiting" as const }
           : p
       )
     );
+
+    setSelectedPatient(null);
+    setPopupMinimized(false);
+    setConfirmFinish(null);
   }
+
+
+
+  function handleCallPatient(patient: Patient) {
+    if (serving || patient.status !== "waiting") return;
+
+    const currentPatient = allPatients.find(
+      p => p.id === patient.id
+    );
+
+    if (
+      !currentPatient ||
+      currentPatient.status !== "waiting" ||
+      currentPatient.clinic !== clinic.code
+    ) {
+      return;
+    }
+
+    onUpdate(
+      allPatients.map(p =>
+        p.id === currentPatient.id
+          ? { ...p, status: "serving" as const }
+          : p
+      )
+    );
+
+    setSelectedPatient(null);
+    setPopupMinimized(false);
+  }
+
+  function handleCancel(patient: Patient) {
+    const currentPatient = allPatients.find(p => p.id === patient.id);
+    if (!currentPatient || currentPatient.clinic !== clinic.code || (currentPatient.status !== 'waiting' && currentPatient.status !== 'serving')) {
+      setConfirmCancel(null);
+      return;
+    }
+
+    onUpdate(allPatients.map(p => p.id === currentPatient.id
+      ? { ...p, status: 'cancelled', completedAt: undefined }
+      : p
+    ));
+    setConfirmCancel(null);
+    setSelectedPatient(current => current?.id === patient.id ? null : current);
+    setPopupMinimized(false);
+  }
+
+  function handleFinish(patient: Patient) {
+    const currentPatient = allPatients.find(p => p.id === patient.id);
+
+    if (!currentPatient || currentPatient.status === "done") {
+      setConfirmFinish(null);
+      return;
+    }
+
+    onUpdate(
+      allPatients.map(p =>
+        p.id === currentPatient.id
+          ? {
+            ...p,
+            status: "done" as const,
+            completedAt: new Date().toISOString(),
+          }
+          : p
+      )
+    );
+
+    setConfirmFinish(null);
+    setSelectedPatient(current =>
+      current?.id === patient.id ? null : current
+    );
+    setPopupMinimized(false);
+  }
+
 
   const isER = clinic.isER;
 
   return (
     <div className="text-slate-100">
-      <header className={`sticky top-0 z-20 rounded-2xl border ${isER ? 'border-red-800 bg-red-950' : 'border-slate-700 bg-slate-900/95'} backdrop-blur-sm`}>
-        <div className="px-4 py-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <header
+        className={`sticky top-0 z-20 rounded-2xl border ${isER
+          ? "border-red-800 bg-red-950"
+          : "border-slate-700 bg-slate-900/95"
+          } backdrop-blur-sm`}
+      >
+        <div className="flex flex-col gap-4 px-4 py-4 lg:flex-row lg:items-center lg:justify-between">
+          {/* Clinic title */}
           <div className="flex items-center gap-3">
-            <div className={`w-2.5 h-8 rounded-full ${isER ? 'bg-red-500' : 'bg-cyan-500'}`} />
+            <div
+              className={`h-8 w-2.5 rounded-full ${isER ? "bg-red-500" : "bg-cyan-500"
+                }`}
+            />
+
             <div>
-              <p className="text-xs font-bold tracking-widest text-slate-400 uppercase">BICA · OPD</p>
-              <h1 className="text-xl font-black text-white">{clinic.name} Clinic Dashboard</h1>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-400">
+                BICA · OPD
+              </p>
+              <h1 className="text-xl font-black text-white">
+                {clinic.name} Clinic Dashboard
+              </h1>
             </div>
           </div>
-          <div className="flex items-center gap-3">
+
+          {/* Counts and current date/time */}
+          <div className="flex flex-wrap items-center gap-3">
             {isER ? (
               <>
-                <div className="rounded-xl bg-red-600/20 border border-red-600/40 px-3 py-1.5 text-center">
-                  <p className="text-xs text-red-400 font-bold">E1</p>
-                  <p className="text-2xl font-black text-red-400 leading-none">{erCounts.e1}</p>
+                <div className="rounded-xl border border-red-600/40 bg-red-600/20 px-3 py-1.5 text-center">
+                  <p className="text-xs font-bold text-red-400">E1</p>
+                  <p className="text-2xl font-black leading-none text-red-400">
+                    {erCounts.e1}
+                  </p>
                 </div>
-                <div className="rounded-xl bg-red-600/20 border border-red-600/40 px-3 py-1.5 text-center">
-                  <p className="text-xs text-red-400 font-bold">E2</p>
-                  <p className="text-2xl font-black text-red-400 leading-none">{erCounts.e2}</p>
+
+                <div className="rounded-xl border border-red-600/40 bg-red-600/20 px-3 py-1.5 text-center">
+                  <p className="text-xs font-bold text-red-400">E2</p>
+                  <p className="text-2xl font-black leading-none text-red-400">
+                    {erCounts.e2}
+                  </p>
                 </div>
               </>
             ) : (
               <>
-                <div className="rounded-xl bg-red-600/20 border border-red-600/40 px-3 py-1.5">
-                  <p className="text-xs text-red-400 font-bold">URGENT</p>
-                  <p className="text-2xl font-black text-red-400 leading-none">{counts.urgent}</p>
+                <div className="rounded-xl border border-red-600/40 bg-red-600/20 px-3 py-1.5 text-center">
+                  <p className="text-xs font-bold text-red-400">URGENT</p>
+                  <p className="text-2xl font-black leading-none text-red-400">
+                    {counts.urgent}
+                  </p>
                 </div>
-                <div className="rounded-xl bg-orange-500/20 border border-orange-500/40 px-3 py-1.5">
-                  <p className="text-xs text-orange-400 font-bold">PRIORITY</p>
-                  <p className="text-2xl font-black text-orange-400 leading-none">{counts.priority}</p>
+
+                <div className="rounded-xl border border-orange-500/40 bg-orange-500/20 px-3 py-1.5 text-center">
+                  <p className="text-xs font-bold text-orange-400">PRIORITY</p>
+                  <p className="text-2xl font-black leading-none text-orange-400">
+                    {counts.priority}
+                  </p>
                 </div>
-                <div className="rounded-xl bg-green-600/20 border border-green-600/40 px-3 py-1.5">
-                  <p className="text-xs text-green-400 font-bold">REGULAR</p>
-                  <p className="text-2xl font-black text-green-400 leading-none">{counts.regular}</p>
+
+                <div className="rounded-xl border border-green-600/40 bg-green-600/20 px-3 py-1.5 text-center">
+                  <p className="text-xs font-bold text-green-400">REGULAR</p>
+                  <p className="text-2xl font-black leading-none text-green-400">
+                    {counts.regular}
+                  </p>
                 </div>
               </>
             )}
+
+            {/* Current date and time */}
+            <div
+              className={`flex items-center gap-3 rounded-xl border px-4 py-2.5 ${isER
+                ? "border-red-600/40 bg-red-600/10"
+                : "border-cyan-500/30 bg-cyan-500/10"
+                }`}
+            >
+              <CalendarClock
+                size={24}
+                color={isER ? "#f87171" : "#67e8f9"}
+                aria-hidden="true"
+              />
+
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  Current Date & Time
+                </p>
+
+                <p className="text-sm font-bold text-white">
+                  {currentDateTime
+                    ? currentDateTime.toLocaleDateString("en-PH", {
+                      year: "numeric",
+                      month: "short",
+                      day: "2-digit",
+                    })
+                    : "Loading date..."}
+                </p>
+
+                <p
+                  className={`text-sm font-semibold ${isER ? "text-red-300" : "text-cyan-300"
+                    }`}
+                >
+                  {currentDateTime
+                    ? currentDateTime.toLocaleTimeString("en-PH", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                      second: "2-digit",
+                      hour12: true,
+                    })
+                    : "Loading time..."}
+                </p>
+              </div>
+            </div>
           </div>
         </div>
       </header>
 
-      <main className="py-6 space-y-6">
-        <NowServingBanner
-          patient={serving}
-          onFinish={() => { if (serving) handleFinish(serving); }}
-        />
+      <main className="py-5 space-y-5">
+        {waiting.some(p => p.category === 'EMERGENCY') && (
+          <div role="alert" className="rounded-2xl border border-red-500/70 bg-red-950/70 px-4 py-4">
+            <p className="font-black tracking-wide text-red-200">Emergency-category ticket in the waiting queue</p>
+            <p className="mt-1 text-sm text-red-100">Please follow the hospital-approved emergency escalation protocol and assess promptly. BICA triage information is not a diagnosis and must not replace clinical judgment.</p>
+          </div>
+        )}
 
-        {CAT_ORDER.filter(cat => (isER ? cat === 'EMERGENCY' || cat === 'URGENT' : true)).map(cat => {
-          const group = grouped[cat];
-          const style = CAT_STYLE[cat];
-          return (
-            <section key={cat}>
-              <div className="flex items-center gap-3 mb-3">
-                <span className={`rounded-lg px-3 py-1 text-xs font-black tracking-widest ${style.badge}`}>{style.label}</span>
-                <span className="text-sm text-slate-500">{group.length} patient{group.length !== 1 ? 's' : ''} waiting</span>
+
+
+        <section
+          className={`relative overflow-hidden rounded-2xl border shadow-xl transition-all duration-500 ${serving
+            ? "border-cyan-400/80 bg-slate-900 shadow-cyan-500/15 ring-1 ring-cyan-400/20"
+            : "border-slate-700 bg-slate-900"
+            }`}
+        >
+          {/* Active patient glow */}
+          {serving && (
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute -inset-1 animate-pulse rounded-2xl bg-cyan-400/5 blur-xl"
+            />
+          )}
+
+          <div className="relative">
+            {/* High-contrast Now Serving header */}
+            <div className={`flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5 ${serving ? "border-cyan-400/30 bg-gradient-to-r from-cyan-950/90 via-slate-900 to-slate-900" : "border-slate-700 bg-slate-950/50"}`}>
+              <div className="flex items-center gap-3">
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${serving ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-200" : "border-slate-700 bg-slate-800 text-slate-400"}`}>
+                  <span className="text-xl font-black">{serving ? "#" : "—"}</span>
+                </div>
+                <div>
+                  <h2 className={`text-xl font-black tracking-wide ${serving ? "text-cyan-100" : "text-white"}`}>NOW SERVING</h2>
+                  <p className="mt-0.5 text-xs text-slate-400">Patient consultation & clinical information</p>
+                </div>
               </div>
-              {group.length === 0 ? (
-                <div className="rounded-xl border border-slate-700/50 bg-slate-800/30 py-4 text-center text-slate-500 text-sm">
-                  No {cat.toLowerCase()} patients in queue
+
+              <div className={`flex items-center gap-2 rounded-full border px-3 py-2 ${serving ? "border-emerald-400/40 bg-emerald-950/60" : "border-slate-700 bg-slate-950/70"}`}>
+                <span className="relative flex h-3 w-3">
+                  {serving && (
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-75" />
+                  )}
+                  <span
+                    className={`relative inline-flex h-3 w-3 rounded-full ${serving
+                      ? "bg-emerald-400 shadow-[0_0_12px_rgba(52,211,153,0.9)]"
+                      : "bg-slate-500"
+                      }`}
+                  />
+                </span>
+                <span
+                  className={`text-xs font-bold uppercase tracking-wide ${serving ? "text-emerald-300" : "text-slate-400"
+                    }`}
+                >
+                  {serving ? "Serving" : "Idle"}
+                </span>
+              </div>
+            </div>
+
+            {serving ? (
+              <div className="space-y-3 p-3 sm:p-4">
+                {/* Compact patient banner: ticket, identity and age group together */}
+                <div className="grid grid-cols-1 gap-3 rounded-xl border border-cyan-400/30 bg-gradient-to-r from-slate-950 via-slate-950 to-cyan-950/40 p-3 sm:grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] sm:items-center">
+                  <div className={`flex min-h-24 flex-col justify-center rounded-lg border px-4 py-3 ${CAT_STYLE[serving.category].badge} border-white/10`}>
+                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Ticket Number</p>
+                    <p className="mt-1 break-words text-4xl font-black leading-none tracking-tight sm:text-5xl">{displayNumber(serving.ticketCode)}</p>
+                    <p className="mt-2 text-xs font-bold uppercase tracking-wide">{serving.category || "Uncategorized"}</p>
+                    <div className="mt-3"><QueueStatusBadge status={serving.status} /></div>
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">Current Patient</p>
+                        <h3 className="mt-0.5 break-words text-xl font-black leading-tight text-white sm:text-2xl">{serving.name || "Unnamed Patient"}</h3>
+                        <p className="mt-1 text-sm text-slate-300">Age: {serving.ageDisplay || serving.age || "Not specified"} <span className="text-slate-600">·</span> Sex: {serving.sex || "Not specified"}</p>
+                      </div>
+                      <div className="min-w-[120px] rounded-lg border border-violet-400/25 bg-violet-950/30 px-3 py-2">
+                        <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300">Age Group</p>
+                        <p className="mt-0.5 text-sm font-bold text-white">{serving.ageGroup || "Not specified"}</p>
+                      </div>
+                    </div>
+                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-800 pt-2 text-xs text-slate-400">
+                      <span>Queue: {serving.ticketCode || "Not available"}</span>
+                      <span>Contact: {serving.contactNumber || "Not provided"}</span>
+                    </div>
+                  </div>
                 </div>
-              ) : (
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                  {group.map(p => <CompactCard key={p.id} patient={p} />)}
+
+                {/* Clinical details are emphasized and arranged compactly */}
+                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
+                  <section className="min-w-0 rounded-xl border border-amber-400/40 border-l-4 border-l-amber-400 bg-slate-950/70 p-3 sm:p-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-amber-400" />
+                      <h3 className="text-xs font-black uppercase tracking-[0.14em] text-amber-200">Chief Complaints</h3>
+                    </div>
+                    <div className="whitespace-pre-wrap break-words text-sm font-medium leading-5 text-slate-100">
+                      {firstComplaint(serving) || "No complaint recorded"}
+                    </div>
+                  </section>
+
+                  <section className="min-w-0 rounded-xl border border-rose-400/40 border-l-4 border-l-rose-400 bg-slate-950/70 p-3 sm:p-4">
+                    <div className="mb-2 flex items-center gap-2">
+                      <span className="h-2 w-2 rounded-full bg-rose-400" />
+                      <h3 className="text-xs font-black uppercase tracking-[0.14em] text-rose-200">Vital Signs</h3>
+                    </div>
+                    {serving.vitals ? (
+                      <VitalsGrid vitals={serving.vitals} />
+                    ) : (
+                      <p className="text-sm text-slate-500">No vital signs recorded.</p>
+                    )}
+                  </section>
                 </div>
-              )}
-            </section>
-          );
-        })}
+
+                {/* Additional clinical assessment */}
+                <div className="grid grid-cols-1 gap-3">
+                  <div className="rounded-xl border border-violet-400/30 border-l-4 border-l-violet-400 bg-slate-950/60 p-3 sm:p-4">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Additional Assessment · NEWS2
+                    </p>
+
+                    {serving.news2 == null ? (
+                      <p className="mt-2 text-sm text-slate-400">
+                        No NEWS2 assessment available.
+                      </p>
+                    ) : typeof serving.news2 === "string" ? (
+                      <p className="mt-2 text-sm font-medium text-slate-200">
+                        {serving.news2}
+                      </p>
+                    ) : (
+                      <>
+                        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
+                          <div>
+                            <p className="text-sm text-slate-400">Total score</p>
+                            <p className="text-2xl font-black text-white">
+                              {serving.news2.total}
+                            </p>
+                          </div>
+
+                          <span
+                            className={`rounded-full px-3 py-1.5 text-xs font-bold ${serving.news2.route === "EMERGENCY"
+                              ? "bg-red-500/15 text-red-300"
+                              : serving.news2.route === "URGENT"
+                                ? "bg-orange-500/15 text-orange-300"
+                                : serving.news2.route === "PRIORITY"
+                                  ? "bg-amber-500/15 text-amber-300"
+                                  : "bg-emerald-500/15 text-emerald-300"
+                              }`}
+                          >
+                            {serving.news2.route}
+                          </span>
+                        </div>
+
+                        <p className="mt-2 text-sm text-slate-300">
+                          Assessment status:{" "}
+                          <span className={serving.news2.complete ? "text-emerald-300" : "text-amber-300"}>
+                            {serving.news2.complete ? "Complete" : "Incomplete"}
+                          </span>
+                        </p>
+
+                        {!serving.news2.complete && (
+                          <div className="mt-3 rounded-lg border border-amber-700/50 bg-amber-950/30 p-3">
+                            <p className="text-xs font-semibold text-amber-300">
+                              Missing parameters
+                            </p>
+                            <p className="mt-1 text-sm text-slate-300">
+                              {serving.news2.missingParameters.join(", ") || "Not specified"}
+                            </p>
+                          </div>
+                        )}
+
+                        {serving.news2.criticalParameters.length > 0 && (
+                          <div className="mt-3 rounded-lg border border-red-700/50 bg-red-950/30 p-3">
+                            <p className="text-xs font-semibold text-red-300">
+                              Critical parameters
+                            </p>
+                            <p className="mt-1 text-sm text-slate-200">
+                              {serving.news2.criticalParameters.join(", ")}
+                            </p>
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+
+
+
+                </div>
+
+                {/* Patient queue actions */}
+                <div className="flex flex-col justify-between gap-3 border-t border-slate-700 pt-4 sm:flex-row sm:items-center">
+                  <p className="text-xs leading-5 text-slate-500">
+                    Return the patient to the waiting queue or finish the visit after consultation.
+                  </p>
+
+                  <div className="flex flex-col gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => handleReturnToQueue(serving)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl border border-amber-500/50 bg-amber-500/10 px-5 py-3 font-semibold text-amber-300 transition hover:bg-amber-500/20 focus:outline-none focus:ring-2 focus:ring-amber-400 focus:ring-offset-2 focus:ring-offset-slate-900"
+                    >
+                      Return to Queue
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setConfirmFinish(serving)}
+                      className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white shadow-lg transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900"
+                    >
+                      Finish Visit
+                    </button>
+                 
+                  </div>
+                </div>
+
+
+
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-700 bg-slate-950/50 px-4 py-8 text-center">
+                <p className="font-semibold text-slate-300">
+                  No patient is currently being served.
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  Call a waiting patient to display their information here.
+                </p>
+              </div>
+            )}
+          </div>
+        </section>
+
+
+
+        {confirmFinish && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 px-4" role="dialog" aria-modal="true" aria-labelledby="finish-confirm-title">
+            <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
+              <h2 id="finish-confirm-title" className="text-lg font-black text-white">Finish this queue visit?</h2>
+              <p className="mt-2 text-sm text-slate-300">Ticket <strong>{displayNumber(confirmFinish.ticketCode)}</strong> will leave the active queue and remain available in Recently Completed and Patient History.</p>
+              <div className="mt-5 flex justify-end gap-3">
+                <button type="button" onClick={() => setConfirmFinish(null)} className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800">Keep active</button>
+                <button type="button" onClick={() => handleFinish(confirmFinish)} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500">Confirm finish</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {confirmCancel && (
+          <div className="fixed inset-0 z-[55] flex items-center justify-center bg-black/75 px-4" role="dialog" aria-modal="true" aria-labelledby="cancel-confirm-title">
+            <div className="w-full max-w-md rounded-2xl border border-rose-700/70 bg-slate-900 p-6 shadow-2xl">
+              <div className="mb-3 flex h-11 w-11 items-center justify-center rounded-xl border border-rose-500/40 bg-rose-950/60 text-rose-300"><X size={22} /></div>
+              <h2 id="cancel-confirm-title" className="text-lg font-black text-white">Cancel this queue ticket?</h2>
+              <p className="mt-2 text-sm leading-6 text-slate-300">Ticket <strong>{displayNumber(confirmCancel.ticketCode)}</strong> will be marked <span className="font-bold text-rose-300">Cancelled</span> and removed from the active queue. The patient record will remain saved.</p>
+              <div className="mt-5 flex justify-end gap-3">
+                <button type="button" onClick={() => setConfirmCancel(null)} className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800">Keep ticket</button>
+                <button type="button" onClick={() => handleCancel(confirmCancel)} className="rounded-xl bg-rose-700 px-4 py-2 text-sm font-bold text-white hover:bg-rose-600">Confirm cancellation</button>
+              </div>
+            </div>
+          </div>
+        )}
+
+
+
+        <section className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70 shadow-xl">
+          {/* Header */}
+          <div className="flex flex-col gap-4 border-b border-slate-700 px-4 py-5 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+            <div className="flex items-center gap-2">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-cyan-500/30 bg-cyan-500/10">
+                <ClipboardList className="h-5 w-5 text-cyan-300" />
+              </div>
+              <div>
+                <h2 className="text-lg font-black text-white">
+                  Pending / New Entries
+                </h2>
+                <p className="mt-0.5 text-sm text-slate-400">
+                  Review patient entries and manage their queue status.
+                </p>
+              </div>
+            </div>
+
+            {/* Category counts */}
+            <div className="flex flex-wrap gap-2">
+              <span className="rounded-lg border border-red-700/50 bg-red-950/50 px-3 py-2 text-xs font-bold text-red-300">
+                Urgent <span className="ml-1">{grouped.URGENT.length}</span>
+              </span>
+              <span className="rounded-lg border border-orange-700/50 bg-orange-950/50 px-3 py-2 text-xs font-bold text-orange-300">
+                Priority <span className="ml-1">{grouped.PRIORITY.length}</span>
+              </span>
+              <span className="rounded-lg border border-green-700/50 bg-green-950/50 px-3 py-2 text-xs font-bold text-green-300">
+                Regular <span className="ml-1">{grouped.REGULAR.length}</span>
+              </span>
+            </div>
+          </div>
+
+          {/* Search and filters */}
+          <div className="grid gap-3 border-b border-slate-700 bg-slate-950/40 px-4 py-4 md:grid-cols-[minmax(0,1fr)_200px_200px_auto] md:px-5">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">
+                Search entries
+              </span>
+              <div className="relative">
+                <Search
+                  className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500"
+                  aria-hidden="true"
+                />
+                <input
+                  type="search"
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  placeholder="Name, ticket, contact, or complaint..."
+                  className="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-9 pr-3 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+                />
+              </div>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">
+                Triage category
+              </span>
+              <select
+                value={categoryFilter}
+                onChange={(event) =>
+                  setCategoryFilter(event.target.value as "ALL" | Category)
+                }
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+              >
+                <option value="ALL">All categories</option>
+                {CAT_ORDER.filter(
+                  (category) =>
+                    !isER || category === "EMERGENCY" || category === "URGENT"
+                ).map((category) => (
+                  <option key={category} value={category}>
+                    {CAT_STYLE[category].label}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">
+                Sort patients
+              </span>
+              <select
+                value={sortOrder}
+                onChange={(event) => setSortOrder(event.target.value as "NEWEST" | "OLDEST" | "PRIORITY")}
+                className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none transition focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20"
+              >
+                <option value="NEWEST">Latest added first</option>
+                <option value="OLDEST">Oldest added first</option>
+                <option value="PRIORITY">Triage priority</option>
+              </select>
+            </label>
+
+            <div className="flex items-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchTerm("");
+                  setCategoryFilter("ALL");
+                  setSortOrder("NEWEST");
+                  setCurrentPage(1);
+                }}
+                disabled={!searchTerm && categoryFilter === "ALL" && sortOrder === "NEWEST"}
+                className="w-full rounded-xl border border-slate-600 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40 md:w-auto"
+              >
+                Clear filters
+              </button>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 md:col-span-4">
+              <p className="text-xs text-slate-400">
+                Showing{" "}
+                <span className="font-bold text-white">
+                  {filteredWaiting.length === 0
+                    ? 0
+                    : (currentPage - 1) * PAGE_SIZE + 1}
+                  {"–"}
+                  {Math.min(currentPage * PAGE_SIZE, filteredWaiting.length)}
+                </span>{" "}
+                of{" "}
+                <span className="font-bold text-white">
+                  {filteredWaiting.length}
+                </span>{" "}
+                matching entries
+              </p>
+              <p className="text-xs text-slate-500">
+                {waiting.length} pending in total
+              </p>
+            </div>
+          </div>
+
+          {/* Privacy reminder */}
+          <div className="border-b border-slate-700/70 px-4 py-3 sm:px-5">
+            <p className="flex items-start gap-2 text-xs leading-5 text-slate-500">
+              <ShieldCheck className="mt-0.5 h-4 w-4 shrink-0" />
+              Patient names, contact details, complaints, and vitals are staff-only
+              information. Do not display these details on public waiting-room screens.
+            </p>
+          </div>
+
+          {/* Patient entries */}
+          {filteredWaiting.length === 0 ? (
+            <div className="px-4 py-14 text-center">
+              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl border border-slate-700 bg-slate-800">
+                <Inbox className="h-6 w-6 text-slate-500" />
+              </div>
+              <p className="mt-3 font-semibold text-slate-200">
+                {waiting.length === 0
+                  ? "No pending patients"
+                  : "No matching entries"}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                {waiting.length === 0
+                  ? "New patient entries will appear here when they join the queue."
+                  : "Try another search term or clear the filters."}
+              </p>
+            </div>
+          ) : (
+            <>
+              <div className="border-b border-slate-700 bg-slate-950/30 px-5 py-3">
+                <p className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                  Patient / Ticket details
+                </p>
+              </div>
+
+              <div className="space-y-3 p-3 sm:p-4">
+                {paginatedWaiting.map((patient) => (
+                  <CompactCard
+                    key={patient.id}
+                    patient={patient}
+                    onSelect={(p) => {
+                      setSelectedPatient(p);
+                      setPopupMinimized(false);
+                      setTransferNotice("");
+                    }}
+                    onCall={handleCallPatient}
+                   
+                    isServing={!!serving}
+                    isNew={newlyAddedPatientIds.has(patient.id)}
+                  />
+                ))}
+              </div>
+
+              {/* Pagination */}
+              <div className="flex flex-col gap-3 border-t border-slate-700 bg-slate-950/30 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+                <p className="text-xs text-slate-400">
+                  Page <span className="font-bold text-white">{currentPage}</span> of{" "}
+                  <span className="font-bold text-white">{totalPages}</span>
+                  <span className="ml-2 text-slate-500">
+                    · {PAGE_SIZE} entries per page
+                  </span>
+                </p>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+                    disabled={currentPage === 1}
+                    className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    <ChevronLeft className="h-4 w-4" />
+                    Previous
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setCurrentPage((page) => Math.min(totalPages, page + 1))
+                    }
+                    disabled={currentPage >= totalPages}
+                    className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200 transition hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                    <ChevronRight className="h-4 w-4" />
+                  </button>
+                </div>
+              </div>
+            </>
+          )}
+        </section>
+
+
+
+
+        {popupPatient && (
+          <PatientDetailsPopup
+            key={popupPatient.id}
+            patient={popupPatient}
+            clinics={CLINICS}
+            minimized={popupMinimized}
+            onMinimize={() => setPopupMinimized(value => !value)}
+            onClose={() => {
+              setSelectedPatient(null);
+              setPopupMinimized(false);
+              setTransferNotice("");
+            }}
+             onCancel={(p) => setConfirmCancel(p)}
+            onCall={() => handleCallPatient(popupPatient)}
+            isServing={!!serving}
+            onFinish={() => setConfirmFinish(popupPatient)}
+            onForward={(destination, note) => {
+              setTransferNotice(
+                `Transfer to ${CLINICS.find(c => c.code === destination)?.name ?? destination
+                } has not been processed. No changes were made to the live queue.`
+              );
+            }}
+          />
+        )}
+
+
+
+        {transferNotice && (
+          <div
+            role="alert"
+            className="fixed bottom-5 left-5 right-5 z-[60] mx-auto max-w-xl rounded-xl border border-amber-700 bg-amber-950 p-4 text-sm text-amber-100 shadow-xl"
+          >
+            <p>{transferNotice}</p>
+            <button
+              type="button"
+              onClick={() => setTransferNotice("")}
+              className="mt-3 rounded-lg border border-amber-700 px-3 py-1.5 font-semibold hover:bg-amber-900"
+            >
+              Dismiss
+            </button>
+          </div>
+        )}
+
+
       </main>
     </div>
   );
@@ -447,88 +1699,211 @@ function ModalShell({ subtitle, title, onClose, children, wide = false }: {
   );
 }
 
-// Recently completed: Queue | Name | Chief complaint (one) | Call again
-function CompletedModal({ clinic, patients, onClose, onCallAgain }: {
-  clinic: Clinic;
-  patients: Patient[];
+// Recently completed: last 24 hours, paginated list + consistent patient details popup.
+const COMPLETED_PAGE_SIZE = 8;
+
+function CompletedPatientDetailsPopup({
+  patient,
+  onClose,
+  onRequeue,
+  onCallNow,
+  showActions = true,
+}: {
+  patient: Patient;
   onClose: () => void;
-  onCallAgain: (p: Patient) => void;
+  onRequeue: (patient: Patient) => void;
+  onCallNow: (patient: Patient) => void;
+  showActions?: boolean;
 }) {
+  const cat = CAT_STYLE[patient.category];
   return (
-    <ModalShell subtitle={clinic.name} title="Recently Completed" onClose={onClose} wide>
-      {patients.length === 0 ? (
-        <p className="py-10 text-center text-sm text-slate-500">No completed patients yet.</p>
-      ) : (
-        <div className="min-w-[520px]">
-          <div className="grid grid-cols-[90px_1fr_1fr_110px] gap-4 px-3 pb-2 text-[11px] font-bold uppercase tracking-wider text-slate-400">
-            <span>Queue</span>
-            <span>Name</span>
-            <span>Chief Complaint</span>
-            <span />
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-950/80 p-3 backdrop-blur-sm sm:p-6" onClick={onClose}>
+      <section role="dialog" aria-modal="true" aria-labelledby="completed-patient-title" onClick={e => e.stopPropagation()} className="flex max-h-[92vh] w-full max-w-5xl flex-col overflow-hidden rounded-3xl border border-cyan-800/80 bg-slate-950 shadow-2xl shadow-black/40 ring-1 ring-cyan-500/10">
+        <header className="flex items-center gap-3 border-b border-cyan-800/70 bg-gradient-to-r from-cyan-950 via-slate-950 to-slate-950 p-4 sm:p-5">
+          <span className={`shrink-0 rounded-2xl px-4 py-3 text-2xl font-black tracking-widest shadow-lg ${cat.badge}`}>{displayNumber(patient.ticketCode)}</span>
+          <div className="min-w-0 flex-1">
+            <h2 id="completed-patient-title" className="truncate text-xl font-black text-white">{patient.name}</h2>
+            <p className="mt-1 text-sm text-slate-300">{cat.label} · {patient.ageDisplay} · {patient.sex}</p>
+            <p className="mt-1 text-xs font-semibold uppercase tracking-wider text-cyan-400">Completed patient details</p>
           </div>
-          <ul className="space-y-2">
-            {patients.map(p => (
-              <li
-                key={p.id}
-                className="grid grid-cols-[90px_1fr_1fr_110px] items-center gap-4 rounded-xl border border-slate-700 bg-slate-800/60 px-3 py-2"
-              >
-                <span className={`w-fit rounded-lg px-2.5 py-1 text-xs font-bold tracking-wider ${CAT_STYLE[p.category].badge}`}>
-                  {displayNumber(p.ticketCode)}
-                </span>
-                <span className="truncate text-sm font-semibold text-white">{p.name}</span>
-                <span className="truncate text-sm text-slate-300">{firstComplaint(p)}</span>
-                <button
-                  onClick={() => onCallAgain(p)}
-                  className="rounded-xl bg-cyan-600 hover:bg-cyan-500 px-3 py-1.5 text-xs font-bold text-white transition-colors"
-                >
-                  Call again
-                </button>
-              </li>
-            ))}
-          </ul>
+          <button type="button" onClick={onClose} aria-label="Close patient details" className="rounded-xl px-3 py-2 text-lg text-slate-400 hover:bg-slate-800 hover:text-white">✕</button>
+        </header>
+        <div className="flex-1 space-y-4 overflow-y-auto p-4 sm:space-y-5 sm:p-5">
+          <div className="grid grid-cols-2 gap-3 rounded-2xl border border-slate-700 bg-slate-900/80 p-3 sm:grid-cols-4 sm:p-4">
+            <div><p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Age group</p><p className="mt-1 font-bold text-white">{patient.ageGroup || '—'}</p></div>
+            <div><p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Contact</p><p className="mt-1 break-words font-bold text-white">{patient.contactNumber || '—'}</p></div>
+            <div className="col-span-2"><p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Arrived at</p><p className="mt-1 font-bold text-white">{formatDateTime(patient.arrivedAt)}</p></div>
+            <div className="col-span-2 sm:col-span-4"><p className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Completed at</p><p className="mt-1 font-bold text-emerald-300">{formatDateTime(patient.completedAt)}</p></div>
+          </div>
+          <section className="overflow-hidden rounded-2xl border border-amber-800/70 bg-slate-900/70">
+            <div className="flex items-center gap-2 border-b border-amber-900/60 bg-amber-950/30 px-4 py-3"><span className="h-5 w-1 rounded-full bg-amber-400" /><h3 className="font-black text-white">Chief Complaints</h3><span className="ml-auto rounded-full border border-amber-800/70 bg-amber-950/50 px-2.5 py-1 text-xs font-bold text-amber-200">{patient.chiefComplaints.length} recorded</span></div>
+            <div className="overflow-x-auto"><table className="w-full min-w-[500px] text-left text-sm"><thead className="bg-slate-800/90 text-xs uppercase tracking-wider text-slate-400"><tr><th className="px-3 py-2.5">Complaint</th><th className="p-3">Duration</th><th className="p-3">Severity</th><th className="p-3">Location</th></tr></thead><tbody>{patient.chiefComplaints.length === 0 ? <tr><td colSpan={4} className="p-5 text-center text-slate-400">No complaints recorded.</td></tr> : patient.chiefComplaints.map((c, i) => <tr key={i} className="border-t border-slate-800 text-slate-200"><td className="px-3 py-3">{c.complaint || '—'}</td><td className="p-3">{c.duration || '—'}</td><td className="p-3">{c.severity || '—'}</td><td className="p-3">{c.location || '—'}</td></tr>)}</tbody></table></div>
+          </section>
+          <section className="overflow-hidden rounded-2xl border border-cyan-800/70 bg-slate-900/70">
+            <div className="flex items-center gap-2 border-b border-cyan-900/70 bg-cyan-950/30 px-4 py-3"><span className="h-5 w-1 rounded-full bg-cyan-400" /><h3 className="font-black text-white">Vital Signs</h3><span className="ml-auto text-xs font-semibold text-cyan-300">Clinical assessment</span></div>
+            <div className="p-3 sm:p-4"><VitalsGrid vitals={patient.vitals} large />{patient.news2 && <div className="mt-3 rounded-xl border border-cyan-800/80 bg-cyan-950/30 p-3 sm:p-4"><p className="font-bold text-cyan-300">NEWS2: {patient.news2.total} · {patient.news2.route}</p><p className="mt-2 text-sm text-slate-300">{patient.news2.complete ? 'Assessment complete' : 'Partial assessment'}. Respiratory rate: {patient.news2.components.respiratoryRate ?? '—'}. Oxygen saturation: {patient.news2.components.oxygenSaturation ?? '—'}. Systolic BP: {patient.news2.components.systolicBloodPressure ?? '—'}. Pulse: {patient.news2.components.pulseRate ?? '—'}. Temperature: {patient.news2.components.temperature ?? '—'}.</p>{patient.news2.criticalParameters.length > 0 && <p className="mt-2 font-bold text-red-300">Critical parameters: {patient.news2.criticalParameters.join(', ')}</p>}</div>}</div>
+          </section>
         </div>
-      )}
-    </ModalShell>
+        <footer className="flex flex-wrap justify-between gap-3 border-t border-cyan-900/70 bg-slate-950 p-4">
+          <button type="button" onClick={onClose} className="rounded-xl border border-slate-600 px-4 py-3 text-sm font-semibold text-slate-200 hover:bg-slate-800">Close</button>
+          {showActions && <div className="flex flex-wrap gap-2">
+            <button type="button" onClick={() => onRequeue(patient)} className="rounded-xl border border-cyan-700 bg-cyan-950/70 px-4 py-3 text-sm font-bold text-cyan-200 hover:bg-cyan-900">Add back to queue</button>
+            <button type="button" onClick={() => onCallNow(patient)} className="rounded-xl bg-cyan-600 px-5 py-3 text-sm font-bold text-white hover:bg-cyan-500">Call immediately</button>
+          </div>}
+        </footer>
+      </section>
+    </div>
   );
 }
 
-// Patient history: full details of every completed patient
-function HistoryModal({ clinic, patients, onClose }: { clinic: Clinic; patients: Patient[]; onClose: () => void }) {
+function CompletedModal({ clinic, patients, onClose, onRequeue, onCallNow }: {
+  clinic: Clinic;
+  patients: Patient[];
+  onClose: () => void;
+  onRequeue: (p: Patient) => void;
+  onCallNow: (p: Patient) => void;
+}) {
+  const [page, setPage] = useState(1);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const totalPages = Math.max(1, Math.ceil(patients.length / COMPLETED_PAGE_SIZE));
+  const visiblePatients = patients.slice((page - 1) * COMPLETED_PAGE_SIZE, page * COMPLETED_PAGE_SIZE);
+  useEffect(() => { if (page > totalPages) setPage(totalPages); }, [page, totalPages]);
+
   return (
-    <ModalShell subtitle={clinic.name} title="Patient History" onClose={onClose}>
-      {patients.length === 0 ? (
-        <p className="py-10 text-center text-sm text-slate-500">No completed patients yet.</p>
-      ) : (
-        <div className="space-y-3">
-          {patients.map(p => (
-            <div key={p.id} className="rounded-xl border border-slate-700 bg-slate-800/60 p-4">
-              <div className="flex items-center gap-3">
-                <span className={`rounded-lg px-2.5 py-1 text-xs font-bold tracking-wider ${CAT_STYLE[p.category].badge}`}>
-                  {displayNumber(p.ticketCode)}
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-white">{p.name}</p>
-                  <p className="text-xs text-slate-400">{p.ageDisplay} · {p.ageGroup} · {p.sex} · Arrived {p.arrivedAt}</p>
-                  {p.contactNumber && <p className="text-xs text-slate-500">{p.contactNumber}</p>}
-                </div>
-                <p className="text-[11px] text-slate-500">Completed {formatDateTime(p.completedAt)}</p>
-              </div>
-              <div className="mt-3 space-y-1">
-                {p.chiefComplaints.map((c, i) => (
-                  <p key={i} className="text-xs text-slate-300">
-                    <span className="font-semibold text-white">{c.complaint}</span>
-                    {' · '}{c.duration || '—'}{' · '}{c.severity !== '' && c.severity != null ? c.severity : '—'}{' · '}{c.location || '—'}
-                  </p>
-                ))}
-              </div>
-              <div className="mt-3">
-                <VitalsGrid vitals={p.vitals} />
+    <ModalShell subtitle={clinic.name} title="Recently Completed · Last 24 Hours" onClose={onClose} wide>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-cyan-900/60 bg-cyan-950/20 px-3 py-2.5">
+        <p className="text-sm text-slate-300"><span className="font-black text-white">{patients.length}</span> completed {patients.length === 1 ? 'patient' : 'patients'} in the last 24 hours</p>
+        <p className="text-xs text-slate-500">Newest completion first · Select a patient for details</p>
+      </div>
+      {patients.length === 0 ? <p className="py-10 text-center text-sm text-slate-500">No patients completed in the last 24 hours.</p> : <>
+        <div className="space-y-2">
+          {visiblePatients.map(p => (
+            <div key={p.id} className="flex flex-col gap-3 rounded-xl border border-slate-700 bg-slate-800/60 p-3 transition-colors hover:border-cyan-700 sm:flex-row sm:items-center">
+              <button type="button" onClick={() => setSelectedPatient(p)} className="flex min-w-0 flex-1 items-center gap-3 text-left" aria-label={`View completed patient ${p.name}`}>
+                <span className={`shrink-0 rounded-lg px-3 py-2 text-xs font-black ${CAT_STYLE[p.category].badge}`}>{displayNumber(p.ticketCode)}</span>
+                <span className="min-w-0 flex-1"><span className="block truncate font-bold text-white">{p.name}</span><span className="mt-1 block truncate text-xs text-slate-400">{p.ageDisplay} · {p.sex} · {firstComplaint(p)}</span><span className="mt-1 block text-[11px] text-emerald-300">Completed {formatDateTime(p.completedAt)}</span></span>
+                <span className="hidden text-sm font-semibold text-cyan-400 sm:block">Details →</span>
+              </button>
+              <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
+                <button type="button" onClick={() => onRequeue(p)} className="rounded-lg border border-cyan-700 px-3 py-2 text-xs font-bold text-cyan-200 hover:bg-cyan-950/70">Add to queue</button>
+                <button type="button" onClick={() => onCallNow(p)} className="rounded-lg bg-cyan-600 px-3 py-2 text-xs font-bold text-white hover:bg-cyan-500">Call now</button>
               </div>
             </div>
           ))}
         </div>
-      )}
+        <div className="mt-4 flex flex-col gap-3 border-t border-slate-700 pt-4 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-xs text-slate-400">Page <span className="font-bold text-white">{page}</span> of <span className="font-bold text-white">{totalPages}</span> · {COMPLETED_PAGE_SIZE} entries per page</p>
+          <div className="flex items-center gap-2"><button type="button" onClick={() => setPage(v => Math.max(1, v - 1))} disabled={page <= 1} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft className="h-4 w-4" />Previous</button><button type="button" onClick={() => setPage(v => Math.min(totalPages, v + 1))} disabled={page >= totalPages} className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight className="h-4 w-4" /></button></div>
+        </div>
+      </>}
+      {selectedPatient && <CompletedPatientDetailsPopup patient={selectedPatient} onClose={() => setSelectedPatient(null)} onRequeue={p => onRequeue(p)} onCallNow={p => onCallNow(p)} />}
     </ModalShell>
+  );
+}
+
+// Full-page patient history with search, filters, date range, sorting, and pagination.
+const HISTORY_PAGE_SIZE = 10;
+
+function PatientHistoryPage({ clinic, patients, onBack }: { clinic: Clinic; patients: Patient[]; onBack: () => void }) {
+  const [search, setSearch] = useState('');
+  const [category, setCategory] = useState<'ALL' | Category>('ALL');
+  const [sort, setSort] = useState<'NEWEST' | 'OLDEST' | 'PRIORITY'>('NEWEST');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [page, setPage] = useState(1);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+
+  const filtered = patients.filter((p) => {
+    const completedDate = p.completedAt ? new Date(p.completedAt) : null;
+    if (!completedDate || !Number.isFinite(completedDate.getTime())) return false;
+    const dateKey = `${completedDate.getFullYear()}-${String(completedDate.getMonth() + 1).padStart(2, '0')}-${String(completedDate.getDate()).padStart(2, '0')}`;
+    if (category !== 'ALL' && p.category !== category) return false;
+    if (dateFrom && dateKey < dateFrom) return false;
+    if (dateTo && dateKey > dateTo) return false;
+    const term = search.trim().toLowerCase();
+    if (term) {
+      const searchable = [p.name, p.ticketCode, p.contactNumber ?? '', ...p.chiefComplaints.map(c => c.complaint)].join(' ').toLowerCase();
+      if (!searchable.includes(term)) return false;
+    }
+    return true;
+  }).sort((a, b) => {
+    if (sort === 'PRIORITY') {
+      const priority = CAT_ORDER.indexOf(a.category) - CAT_ORDER.indexOf(b.category);
+      if (priority !== 0) return priority;
+    }
+    const aTime = new Date(a.completedAt ?? 0).getTime();
+    const bTime = new Date(b.completedAt ?? 0).getTime();
+    return sort === 'OLDEST' ? aTime - bTime : bTime - aTime;
+  });
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / HISTORY_PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+  const visible = filtered.slice((safePage - 1) * HISTORY_PAGE_SIZE, safePage * HISTORY_PAGE_SIZE);
+  const clearFilters = () => { setSearch(''); setCategory('ALL'); setSort('NEWEST'); setDateFrom(''); setDateTo(''); setPage(1); };
+
+  return (
+    <main className="min-h-screen bg-slate-900 text-slate-100">
+      <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 lg:px-8">
+        <header className="mb-6 flex flex-col gap-4 border-b border-slate-700 pb-5 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex items-start gap-3">
+            <button type="button" onClick={onBack} aria-label="Back to clinic dashboard" className="mt-1 rounded-xl border border-slate-700 bg-slate-800 p-2.5 text-slate-200 transition hover:border-cyan-700 hover:bg-slate-700"><ChevronLeft size={20} /></button>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-[0.2em] text-cyan-400">{clinic.name}</p>
+              <h1 className="mt-1 text-2xl font-black text-white sm:text-3xl">Patient History</h1>
+              <p className="mt-1 text-sm text-slate-400">All completed queue entries · Search, filter, sort, and review by completion date.</p>
+            </div>
+          </div>
+          <div className="rounded-xl border border-cyan-800/70 bg-cyan-950/30 px-4 py-3">
+            <p className="text-xs font-semibold uppercase tracking-wider text-cyan-300">Matching records</p>
+            <p className="mt-1 text-2xl font-black text-white">{filtered.length}</p>
+          </div>
+        </header>
+
+        <section className="overflow-hidden rounded-2xl border border-slate-700 bg-slate-900/70 shadow-xl">
+          <div className="grid gap-3 border-b border-slate-700 bg-slate-950/40 p-4 sm:grid-cols-2 xl:grid-cols-[minmax(220px,1.5fr)_minmax(150px,1fr)_minmax(150px,1fr)_minmax(150px,1fr)_minmax(150px,1fr)_auto]">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">Search patients</span>
+              <div className="relative"><Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" /><input type="search" value={search} onChange={e => { setSearch(e.target.value); setPage(1); }} placeholder="Name, ticket, contact, complaint…" className="w-full rounded-xl border border-slate-700 bg-slate-800 py-2.5 pl-9 pr-3 text-sm text-white outline-none placeholder:text-slate-500 focus:border-cyan-500" /></div>
+            </label>
+            <label className="block"><span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">Triage category</span><select value={category} onChange={e => { setCategory(e.target.value as 'ALL' | Category); setPage(1); }} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500"><option value="ALL">All categories</option>{CAT_ORDER.map(c => <option key={c} value={c}>{CAT_STYLE[c].label}</option>)}</select></label>
+            <label className="block"><span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">Sort by</span><select value={sort} onChange={e => { setSort(e.target.value as 'NEWEST' | 'OLDEST' | 'PRIORITY'); setPage(1); }} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500"><option value="NEWEST">Newest completed</option><option value="OLDEST">Oldest completed</option><option value="PRIORITY">Triage priority</option></select></label>
+            <label className="block"><span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">Completed from</span><input type="date" value={dateFrom} max={dateTo || undefined} onChange={e => { setDateFrom(e.target.value); setPage(1); }} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500" /></label>
+            <label className="block"><span className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-slate-400">Completed to</span><input type="date" value={dateTo} min={dateFrom || undefined} onChange={e => { setDateTo(e.target.value); setPage(1); }} className="w-full rounded-xl border border-slate-700 bg-slate-800 px-3 py-2.5 text-sm text-white outline-none focus:border-cyan-500" /></label>
+            <div className="flex items-end"><button type="button" onClick={clearFilters} disabled={!search && category === 'ALL' && sort === 'NEWEST' && !dateFrom && !dateTo} className="w-full rounded-xl border border-slate-600 px-4 py-2.5 text-sm font-semibold text-slate-200 transition hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">Clear</button></div>
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-800 px-4 py-3">
+            <p className="text-xs text-slate-400">Showing <span className="font-bold text-white">{filtered.length ? (safePage - 1) * HISTORY_PAGE_SIZE + 1 : 0}–{Math.min(safePage * HISTORY_PAGE_SIZE, filtered.length)}</span> of <span className="font-bold text-white">{filtered.length}</span> completed entries</p>
+            <p className="text-xs text-slate-500">Completion date and time are shown for each record.</p>
+          </div>
+
+          {visible.length === 0 ? <div className="px-5 py-16 text-center"><ClipboardList className="mx-auto mb-3 text-slate-600" size={32} /><p className="font-bold text-slate-200">No completed entries found</p><p className="mt-1 text-sm text-slate-500">Try changing the search, category, or date range.</p></div> : <div className="divide-y divide-slate-800">
+            {visible.map(p => <button key={p.id} type="button" onClick={() => setSelectedPatient(p)} aria-label={`View details for ${p.name}, ticket ${displayNumber(p.ticketCode)}`} className="flex w-full flex-col gap-3 px-4 py-4 text-left transition hover:bg-cyan-950/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-cyan-500 sm:flex-row sm:items-center sm:px-5">
+              <span className={`flex min-w-[82px] shrink-0 items-center justify-center rounded-xl px-3 py-3 text-sm font-black tracking-wide ${CAT_STYLE[p.category].badge}`}>{displayNumber(p.ticketCode)}</span>
+              <span className="min-w-0 flex-1">
+                <span className="flex flex-wrap items-center gap-2"><span className="font-bold text-white">{p.name}</span><span className="rounded-md border border-slate-700 bg-slate-800 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-slate-300">{p.category}</span></span>
+                <span className="mt-1 block text-sm text-slate-300">{p.ageDisplay} · {p.ageGroup} · {p.sex}</span>
+                <span className="mt-1 block truncate text-xs text-slate-400">Complaint: {p.chiefComplaints.map(c => c.complaint).filter(Boolean).join(', ') || '—'}</span>
+                {p.contactNumber && <span className="mt-1 block text-xs text-slate-500">Contact: {p.contactNumber}</span>}
+              </span>
+              <span className="flex shrink-0 items-center justify-between gap-3 sm:min-w-[220px] sm:justify-end">
+                <span className="rounded-xl border border-emerald-900/70 bg-emerald-950/20 px-3 py-2 sm:min-w-[190px]">
+                  <span className="block text-[10px] font-bold uppercase tracking-wider text-emerald-400">Completed at</span><span className="mt-1 block text-sm font-semibold text-slate-100">{formatDateTime(p.completedAt)}</span>
+                  <span className="mt-1 block text-xs text-slate-500">Arrived: {formatDateTime(p.arrivedAt)}</span>
+                </span>
+                <span className="text-xs font-bold text-cyan-300">Details →</span>
+              </span>
+            </button>)}
+          </div>}
+
+          <footer className="flex flex-col gap-3 border-t border-slate-700 bg-slate-950/30 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <p className="text-xs text-slate-400">Page <span className="font-bold text-white">{safePage}</span> of <span className="font-bold text-white">{totalPages}</span> · {HISTORY_PAGE_SIZE} entries per page</p>
+            <div className="flex items-center gap-2"><button type="button" onClick={() => setPage(v => Math.max(1, v - 1))} disabled={safePage <= 1} className="inline-flex items-center gap-2 rounded-lg border border-slate-700 px-3 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40"><ChevronLeft size={16} />Previous</button><button type="button" onClick={() => setPage(v => Math.min(totalPages, v + 1))} disabled={safePage >= totalPages} className="inline-flex items-center gap-2 rounded-lg border border-cyan-500/30 bg-cyan-500/10 px-3 py-2 text-sm font-semibold text-cyan-200 hover:bg-cyan-500/20 disabled:cursor-not-allowed disabled:opacity-40">Next<ChevronRight size={16} /></button></div>
+          </footer>
+        </section>
+      </div>
+      {selectedPatient && <CompletedPatientDetailsPopup patient={selectedPatient} onClose={() => setSelectedPatient(null)} onRequeue={() => setSelectedPatient(null)} onCallNow={() => setSelectedPatient(null)} showActions={false} />}
+    </main>
   );
 }
 
@@ -644,6 +2019,82 @@ export default function ClinicDashboard() {
   const [patientError, setPatientError] = useState("");
   const [loadingPatients, setLoadingPatients] = useState(false);
   const patients = patientState && activeClinic?.code === patientState.clinic ? patientState.patients : [];
+  const [newPatientToasts, setNewPatientToasts] = useState<PatientToast[]>([]);
+  const [newlyAddedPatientIds, setNewlyAddedPatientIds] = useState<Set<string>>(new Set());
+  const highlightTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  const [notificationLog, setNotificationLog] = useState<QueueNotification[]>([]);
+  const [showNotificationLog, setShowNotificationLog] = useState(false);
+  const [notificationPage, setNotificationPage] = useState(1);
+  const [soundEnabled, setSoundEnabled] = useState(true);
+  const seenPatientIdsRef = useRef<Set<string> | null>(null);
+  const soundContextRef = useRef<AudioContext | null>(null);
+  const [hydratedNotificationClinic, setHydratedNotificationClinic] = useState<ClinicCode | null>(null);
+  const unreadNotificationCount = notificationLog.filter((item) => !item.read).length;
+  const pageCount = Math.max(1, Math.ceil(notificationLog.length / NOTIFICATION_PAGE_SIZE));
+  const visibleNotifications = notificationLog.slice(
+    (notificationPage - 1) * NOTIFICATION_PAGE_SIZE,
+    notificationPage * NOTIFICATION_PAGE_SIZE
+  );
+
+  // Load a separate history for each clinic on this browser/device.
+  useEffect(() => {
+    if (!activeClinic || typeof window === "undefined") return;
+    setHydratedNotificationClinic(null);
+    try {
+      const stored = window.localStorage.getItem(`${NOTIFICATION_STORAGE_PREFIX}:${activeClinic.code}`);
+      const parsed = stored ? JSON.parse(stored) : [];
+      setNotificationLog(Array.isArray(parsed) ? parsed : []);
+      setNotificationPage(1);
+    } catch {
+      setNotificationLog([]);
+      setNotificationPage(1);
+    } finally {
+      setHydratedNotificationClinic(activeClinic.code);
+    }
+  }, [activeClinic?.code]);
+
+  // Keep the log across logout and browser refreshes. This is browser-local storage,
+  // not a shared/server-side audit trail.
+  useEffect(() => {
+    if (!activeClinic || typeof window === "undefined") return;
+    if (hydratedNotificationClinic !== activeClinic.code) return;
+    try {
+      window.localStorage.setItem(
+        `${NOTIFICATION_STORAGE_PREFIX}:${activeClinic.code}`,
+        JSON.stringify(notificationLog)
+      );
+    } catch (error) {
+      console.error("Could not save the local notification history.", error);
+    }
+  }, [activeClinic?.code, notificationLog, hydratedNotificationClinic]);
+
+  function playNotificationPing(force = false) {
+    if ((!soundEnabled && !force) || typeof window === "undefined") return;
+    try {
+      const AudioContextClass = window.AudioContext;
+      if (!AudioContextClass) return;
+      const context = soundContextRef.current ?? new AudioContextClass();
+      soundContextRef.current = context;
+      if (context.state === "suspended") void context.resume();
+
+      const now = context.currentTime;
+      const oscillator = context.createOscillator();
+      const gain = context.createGain();
+      oscillator.type = "sine";
+      oscillator.frequency.setValueAtTime(880, now);
+      oscillator.frequency.setValueAtTime(1174.66, now + 0.09);
+      gain.gain.setValueAtTime(0.0001, now);
+      gain.gain.exponentialRampToValueAtTime(0.16, now + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, now + 0.22);
+      oscillator.connect(gain);
+      gain.connect(context.destination);
+      oscillator.start(now);
+      oscillator.stop(now + 0.23);
+    } catch {
+      // Browser audio may be blocked until the staff interacts with the page.
+    }
+  }
+
 
   useEffect(() => {
     let mounted = true;
@@ -691,26 +2142,155 @@ export default function ClinicDashboard() {
   }, []);
 
   useEffect(() => {
-    if (!activeClinic) return;
-    return subscribeToClinicPatients(
-      activeClinic.code,
-      records => {
-        const promoted = promoteAll(records);
-        setPatientState({ clinic: activeClinic.code, patients: promoted });
+    if (!activeClinic) {
+      seenPatientIdsRef.current = null;
+      highlightTimersRef.current.forEach((timer) => clearTimeout(timer));
+      highlightTimersRef.current.clear();
+      setNewlyAddedPatientIds(new Set());
+      setNewPatientToasts([]);
+      setPatientState(null);
+      setLoadingPatients(false);
+      return;
+    }
+
+    const clinicCode = activeClinic.code;
+
+    // The initial snapshot establishes the baseline and does not notify.
+    seenPatientIdsRef.current = null;
+    highlightTimersRef.current.forEach((timer) => clearTimeout(timer));
+    highlightTimersRef.current.clear();
+    setNewlyAddedPatientIds(new Set());
+    setNewPatientToasts([]);
+    setLoadingPatients(true);
+
+    const unsubscribe = subscribeToClinicPatients(
+      clinicCode,
+      (updatedPatients) => {
+        const seenIds = seenPatientIdsRef.current;
+
+        if (seenIds === null) {
+          seenPatientIdsRef.current = new Set(
+            updatedPatients.map((patient) => patient.id)
+          );
+
+          setPatientState({
+            clinic: clinicCode,
+            patients: updatedPatients,
+          });
+          setPatientError("");
+          setLoadingPatients(false);
+          return;
+        }
+
+        const newPatients = updatedPatients.filter(
+          (patient) => !seenIds.has(patient.id)
+        );
+
+        // Add every observed ID so routine queue updates don't alert again.
+        updatedPatients.forEach((patient) => {
+          seenIds.add(patient.id);
+        });
+
+        if (newPatients.length > 0) {
+          const addedIds = newPatients.map((patient) => patient.id);
+          setNewlyAddedPatientIds((previous) => new Set([...previous, ...addedIds]));
+          addedIds.forEach((id) => {
+            const existingTimer = highlightTimersRef.current.get(id);
+            if (existingTimer) clearTimeout(existingTimer);
+            const timer = setTimeout(() => {
+              setNewlyAddedPatientIds((previous) => {
+                const next = new Set(previous);
+                next.delete(id);
+                return next;
+              });
+              highlightTimersRef.current.delete(id);
+            }, 15000);
+            highlightTimersRef.current.set(id, timer);
+          });
+
+          const detectedAt = new Date().toISOString();
+          const newRecords: QueueNotification[] = newPatients.map((patient) => ({
+            id: `${clinicCode}-${patient.id}-${detectedAt}`,
+            ticketCode: patient.ticketCode,
+            category: patient.category,
+            clinicCode,
+            clinicName: CLINICS.find((clinic) => clinic.code === clinicCode)?.name ?? clinicCode,
+            createdAt: detectedAt,
+            read: false,
+          }));
+
+          setNotificationLog((previous) => [...newRecords, ...previous]);
+          setNewPatientToasts((previous) => [
+            ...newPatients.map((patient, index) => ({
+              id: `${patient.id}-${detectedAt}-${index}`,
+              ticketCode: patient.ticketCode,
+              clinicName: CLINICS.find((clinic) => clinic.code === clinicCode)?.name ?? clinicCode,
+              expiresAt: Date.now() + TOAST_LIFETIME_MS,
+              exiting: false,
+            })),
+            ...previous,
+          ]);
+          playNotificationPing();
+        }
+
+        setPatientState({
+          clinic: clinicCode,
+          patients: updatedPatients,
+        });
         setPatientError("");
         setLoadingPatients(false);
-        if (records.some((patient, index) => patient.status !== promoted[index]?.status)) {
-          void persistPatientStatuses(records, promoted).catch(error => {
-            setPatientError(error instanceof Error ? error.message : "Could not update the clinic queue.");
-          });
-        }
       },
-      error => {
-        setPatientError(error.message);
+      (error) => {
+        setPatientError(
+          error instanceof Error
+            ? error.message
+            : "Could not load the live clinic queue."
+        );
         setLoadingPatients(false);
-      },
+      }
     );
-  }, [activeClinic]);
+
+    return () => {
+      unsubscribe();
+    };
+  }, [activeClinic?.code]);
+
+  useEffect(() => {
+    return () => {
+      highlightTimersRef.current.forEach((timer) => clearTimeout(timer));
+      highlightTimersRef.current.clear();
+    };
+  }, []);
+
+  useEffect(() => {
+    if (newPatientToasts.length === 0) return;
+    const timers: ReturnType<typeof setTimeout>[] = [];
+
+    newPatientToasts.forEach((toast) => {
+      const fadeDelay = Math.max(0, toast.expiresAt - Date.now() - TOAST_FADE_MS);
+      const removeDelay = Math.max(0, toast.expiresAt - Date.now());
+      if (!toast.exiting) {
+        timers.push(setTimeout(() => {
+          setNewPatientToasts((previous) => previous.map((item) =>
+            item.id === toast.id ? { ...item, exiting: true } : item
+          ));
+        }, fadeDelay));
+      }
+      timers.push(setTimeout(() => {
+        setNewPatientToasts((previous) => previous.filter((item) => item.id !== toast.id));
+      }, removeDelay));
+    });
+
+    return () => timers.forEach(clearTimeout);
+  }, [newPatientToasts]);
+
+  function markNotificationRead(id: string) {
+    setNotificationLog((previous) => previous.map((item) => item.id === id ? { ...item, read: true } : item));
+  }
+
+  function markAllNotificationsRead() {
+    setNotificationLog((previous) => previous.map((item) => ({ ...item, read: true })));
+  }
 
   async function commit(next: Patient[]) {
     const promoted = promoteAll(next);
@@ -741,8 +2321,8 @@ export default function ClinicDashboard() {
           ? "Email or password is incorrect."
           : error.message
         : error instanceof Error
-        ? error.message
-        : "Could not sign in to the clinic dashboard.";
+          ? error.message
+          : "Could not sign in to the clinic dashboard.";
       setLoginError(message);
       return message;
     }
@@ -760,16 +2340,22 @@ export default function ClinicDashboard() {
     }
   }
 
-  // Call a completed patient again: they become "serving";
-  // whoever was being served goes back to waiting and keeps their place in line
-  function handleCallAgain(patient: Patient) {
-    commit(
-      patients.map(p => {
-        if (p.id === patient.id) return { ...p, status: 'serving' as const, completedAt: undefined };
-        if (p.clinic === patient.clinic && p.status === 'serving') return { ...p, status: 'waiting' as const };
-        return p;
-      })
-    );
+  // Re-queue a completed patient as waiting, preserving the active serving patient.
+  function handleRequeueCompleted(patient: Patient) {
+    commit(patients.map(p => p.id === patient.id
+      ? { ...p, status: 'waiting' as const, completedAt: undefined }
+      : p));
+    setShowCompleted(false);
+  }
+
+  // Call a completed patient immediately. If another patient is being served,
+  // return that patient to waiting rather than leaving two patients as serving.
+  function handleCallCompletedNow(patient: Patient) {
+    commit(patients.map(p => {
+      if (p.id === patient.id) return { ...p, status: 'serving' as const, completedAt: undefined };
+      if (p.clinic === patient.clinic && p.status === 'serving') return { ...p, status: 'waiting' as const };
+      return p;
+    }));
     setShowCompleted(false);
   }
 
@@ -778,9 +2364,19 @@ export default function ClinicDashboard() {
   }
   if (!activeClinic) return <ClinicLogin onLogin={handleLogin} errorMessage={loginError} />;
 
-  const completed = patients
+  const allCompleted = patients
     .filter(p => p.clinic === activeClinic.code && p.status === 'done')
     .sort((a, b) => new Date(b.completedAt ?? 0).getTime() - new Date(a.completedAt ?? 0).getTime());
+  const completedLast24Hours = allCompleted.filter(p => {
+    if (!p.completedAt) return false;
+    const completedAtMs = new Date(p.completedAt).getTime();
+    const ageMs = Date.now() - completedAtMs;
+    return Number.isFinite(completedAtMs) && ageMs >= 0 && ageMs <= 24 * 60 * 60 * 1000;
+  });
+
+  if (showHistory) {
+    return <PatientHistoryPage clinic={activeClinic} patients={allCompleted} onBack={() => setShowHistory(false)} />;
+  }
 
   return (
     <div className="min-h-screen bg-slate-900 text-slate-100">
@@ -789,10 +2385,44 @@ export default function ClinicDashboard() {
         <div className="mb-6 flex items-start justify-between gap-4">
           <div>
             <h2 className="text-3xl font-black text-white">OPD Specialized Clinic</h2>
-            <p className="text-sm text-slate-400">Streamlining Patient Intake</p>
+            <p className="text-sm text-slate-400">Live clinic queue · Staff-controlled patient calling</p>
           </div>
           <div className="flex items-center gap-3">
-            <CompletedButton count={completed.length} onClick={() => setShowCompleted(true)} />
+            <button
+              type="button"
+              onClick={() => {
+                setShowNotificationLog((open) => !open);
+                markAllNotificationsRead();
+              }}
+              aria-label={`Notifications, ${unreadNotificationCount} unread`}
+              aria-expanded={showNotificationLog}
+              className="relative flex h-11 items-center gap-2 rounded-xl border border-slate-600 bg-slate-800 px-3 text-sm font-semibold text-white transition hover:bg-slate-700"
+            >
+              <Bell className="h-5 w-5 text-cyan-300" />
+              <span className="hidden sm:inline">Notifications</span>
+              {unreadNotificationCount > 0 && (
+                <span className="absolute -right-2 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-red-600 px-1 text-xs font-black text-white ring-2 ring-slate-900">
+                  {unreadNotificationCount > 99 ? "99+" : unreadNotificationCount}
+                </span>
+              )}
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (soundEnabled) {
+                  setSoundEnabled(false);
+                } else {
+                  setSoundEnabled(true);
+                  playNotificationPing(true);
+                }
+              }}
+              aria-label={soundEnabled ? "Mute notification sound" : "Enable notification sound"}
+              title={soundEnabled ? "Mute notification sound" : "Enable notification sound"}
+              className="flex h-11 w-11 items-center justify-center rounded-xl border border-slate-600 bg-slate-800 text-slate-200 transition hover:bg-slate-700"
+            >
+              {soundEnabled ? <Volume2 size={19} /> : <VolumeX size={19} />}
+            </button>
+            <CompletedButton count={completedLast24Hours.length} onClick={() => setShowCompleted(true)} />
             <MenuButton onHistory={() => setShowHistory(true)} onLogout={handleLogout} />
           </div>
         </div>
@@ -807,20 +2437,110 @@ export default function ClinicDashboard() {
             Live patient data error: {patientError}
           </p>
         )}
-        {loadingPatients && <p className="mb-4 text-sm text-cyan-300">Loading live clinic queue…</p>}
-        <ClinicQueue clinic={activeClinic} allPatients={patients} onUpdate={commit} />
+        <div className="fixed right-4 top-4 z-[100] flex w-[calc(100%-2rem)] max-w-sm flex-col gap-3 pointer-events-none">
+          {newPatientToasts.map((toast) => (
+            <div
+              key={toast.id}
+              role="status"
+              aria-live="polite"
+              className={`pointer-events-auto rounded-2xl border border-cyan-400/30 bg-slate-900 p-4 shadow-2xl shadow-black/30 transition-all duration-500 ease-in-out ${toast.exiting ? "translate-x-4 opacity-0" : "translate-x-0 opacity-100"}`}
+            >
+              <div className="flex items-start gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-cyan-500/15 text-cyan-300">
+                  <ClipboardList size={21} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-white">New Patient Added</p>
+                  <p className="mt-1 text-sm text-slate-300">
+                    Ticket <span className="font-bold text-cyan-300">{displayNumber(toast.ticketCode)}</span> has been added to the {toast.clinicName} queue.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setNewPatientToasts((previous) => previous.filter((item) => item.id !== toast.id))}
+                  aria-label="Dismiss notification"
+                  className="rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {showNotificationLog && (
+          <section
+            role="region"
+            aria-label="Notification history"
+            className="fixed right-4 top-20 z-[90] flex max-h-[75vh] w-[calc(100%-2rem)] max-w-lg flex-col overflow-hidden rounded-2xl border border-slate-700 bg-slate-900 shadow-2xl shadow-black/40"
+          >
+            <div className="flex items-center justify-between gap-3 border-b border-slate-700 px-4 py-3">
+              <div>
+                <h3 className="font-black text-white">Notification History</h3>
+                <p className="text-xs text-slate-400">{notificationLog.length} records · saved on this browser</p>
+              </div>
+              <button type="button" onClick={() => setShowNotificationLog(false)} aria-label="Close notification history" className="rounded-lg p-2 text-slate-400 hover:bg-slate-800 hover:text-white">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="overflow-y-auto">
+              {visibleNotifications.length === 0 ? (
+                <div className="px-5 py-10 text-center">
+                  <Bell className="mx-auto mb-3 text-slate-500" size={28} />
+                  <p className="font-semibold text-slate-200">No notifications yet</p>
+                  <p className="mt-1 text-sm text-slate-400">New queue entries will appear here.</p>
+                </div>
+              ) : visibleNotifications.map((notification) => (
+                <div key={notification.id} className={`border-b border-slate-800 px-4 py-3 ${notification.read ? "bg-slate-900" : "bg-cyan-950/30"}`}>
+                  <div className="flex items-start gap-3">
+                    <span className={`mt-1.5 h-2.5 w-2.5 shrink-0 rounded-full ${notification.read ? "bg-slate-600" : "bg-cyan-400"}`} />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="font-bold text-white">Ticket {displayNumber(notification.ticketCode)}</p>
+                        <span className="rounded-md bg-slate-800 px-2 py-0.5 text-xs text-slate-300">{notification.category}</span>
+                      </div>
+                      <p className="mt-1 text-sm text-slate-300">Added to {notification.clinicName}</p>
+                      <p className="mt-1 text-xs text-slate-500">{formatDateTime(notification.createdAt)}</p>
+                    </div>
+                    {!notification.read && (
+                      <button type="button" onClick={() => markNotificationRead(notification.id)} className="shrink-0 rounded-lg px-2 py-1 text-xs font-semibold text-cyan-300 hover:bg-cyan-950/50">
+                        Mark read
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex items-center justify-between gap-3 border-t border-slate-700 px-4 py-3">
+              <p className="text-xs text-slate-400">Page {notificationPage} of {pageCount}</p>
+              <div className="flex items-center gap-2">
+                <button type="button" disabled={notificationPage <= 1} onClick={() => setNotificationPage((page) => Math.max(1, page - 1))} className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
+                  Previous
+                </button>
+                <button type="button" disabled={notificationPage >= pageCount} onClick={() => setNotificationPage((page) => Math.min(pageCount, page + 1))} className="rounded-lg border border-slate-700 px-3 py-1.5 text-sm text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-40">
+                  Next
+                </button>
+              </div>
+            </div>
+          </section>
+        )}
+        {loadingPatients && <p role="status" className="mb-4 rounded-xl border border-cyan-800 bg-cyan-950/40 px-4 py-3 text-sm text-cyan-200">Connecting to the live clinic queue…</p>}
+        {!loadingPatients && !patientError && <p role="status" className="mb-4 text-xs text-emerald-300">● Live queue connected</p>}
+        <ClinicQueue clinic={activeClinic} allPatients={patients} onUpdate={commit} newlyAddedPatientIds={newlyAddedPatientIds} />
+
       </div>
+
 
       {showCompleted && (
         <CompletedModal
           clinic={activeClinic}
-          patients={completed}
+          patients={completedLast24Hours}
           onClose={() => setShowCompleted(false)}
-          onCallAgain={handleCallAgain}
+          onRequeue={handleRequeueCompleted}
+          onCallNow={handleCallCompletedNow}
         />
-      )}
-      {showHistory && (
-        <HistoryModal clinic={activeClinic} patients={completed} onClose={() => setShowHistory(false)} />
       )}
     </div>
   );
