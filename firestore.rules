@@ -71,11 +71,11 @@ service cloud.firestore {
       return news2 is map
         && news2.keys().hasAll([
           'components', 'total', 'complete', 'missingParameters',
-          'criticalParameters', 'route'
+          'criticalParameters', 'risk', 'route'
         ])
         && news2.keys().hasOnly([
           'components', 'total', 'complete', 'missingParameters',
-          'criticalParameters', 'route'
+          'criticalParameters', 'risk', 'route'
         ])
         && news2.components is map
         && news2.components.keys().hasAll([
@@ -96,10 +96,19 @@ service cloud.firestore {
         && news2.total is int
         && news2.total >= 0
         && news2.total <= 20
-        && news2.complete == false
+        && news2.complete is bool
         && news2.missingParameters is list
-        && news2.missingParameters.hasAll(['Consciousness', 'Supplemental oxygen'])
+        && news2.missingParameters.hasOnly([
+          'Respiratory rate', 'SpO2', 'Systolic blood pressure',
+          'Pulse rate', 'Temperature'
+        ])
+        && news2.complete == (news2.missingParameters.size() == 0)
         && news2.criticalParameters is list
+        && news2.criticalParameters.hasOnly([
+          'Respiratory rate', 'SpO2', 'Systolic blood pressure',
+          'Pulse rate', 'Consciousness', 'Temperature', 'Supplemental oxygen'
+        ])
+        && news2.risk in ['LOW', 'LOW_MEDIUM', 'MEDIUM', 'HIGH']
         && news2.route in ['EMERGENCY', 'URGENT', 'PRIORITY', 'REGULAR'];
     }
 
@@ -209,11 +218,9 @@ service cloud.firestore {
         && request.resource.data.status == 'waiting'
         && request.resource.data.completedAt == null
         && request.resource.data.createdAt == request.time
-        && hasValidQueueAllocation(request.resource.data, patientId)
-        && (request.auth == null || isStaffForClinic(request.resource.data.clinic));
+        && hasValidQueueAllocation(request.resource.data, patientId);
       allow update: if isStaffForClinic(resource.data.clinic)
         && request.resource.data.clinic == resource.data.clinic
-        && validPatient(request.resource.data)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'completedAt'])
         && validStatusTransition();
       allow delete: if false;

@@ -3,7 +3,6 @@ import React, { useEffect, useRef, useState } from "react";
 import type { TicketMetadata } from "./summaryTypes";
 import KioskHeader from "@/Component/kioskHeader";
 import type { KioskLanguage } from "@/lib/kioskLanguage";
-import type { NEWS2Result } from "@/lib/news2";
 import type { PatientAgeGroup } from "@/lib/patientDemographics";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -23,7 +22,6 @@ interface SummaryScreenProps {
   rr: string;
   spo2: string;
   temperature: string;
-  news2?: NEWS2Result;
   complaints: string;
   clinic: string;
   destination: string;
@@ -315,7 +313,6 @@ export default function SummaryScreen({
   rr,
   spo2,
   temperature,
-  news2,
   complaints,
   clinic,
   destination,
@@ -420,45 +417,6 @@ export default function SummaryScreen({
             ? language === "en" ? "Your Triage Ticket" : "Imong Tiket sa Triage"
             : language === "en" ? "Please wait" : "Palihog hulat"}
         </h2>
-
-        {news2 && (
-          <section aria-label="NEWS2 result" className="w-full max-w-3xl rounded-2xl border border-cyan-700 bg-cyan-900 p-5 text-white">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-              <h3 className="text-xl font-bold">NEWS2 · {news2.complete ? "Complete" : "Partial"}</h3>
-              <p className="text-lg font-extrabold">
-                Total: {news2.total} · {news2.route}
-              </p>
-            </div>
-            <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
-              {([
-                ["Respiratory rate", news2.components.respiratoryRate],
-                ["SpO₂ (Scale 1)", news2.components.oxygenSaturation],
-                ["Systolic blood pressure", news2.components.systolicBloodPressure],
-                ["Pulse rate", news2.components.pulseRate],
-                ["Consciousness", news2.components.consciousness],
-                ["Temperature", news2.components.temperature],
-                ["Supplemental oxygen", news2.components.supplementalOxygen],
-              ] as const).map(([label, score]) => (
-                <div key={label} className="flex justify-between gap-2 border-b border-cyan-800 py-1">
-                  <dt>{label}</dt>
-                  <dd className={score === 3 ? "font-black text-red-300" : "font-bold"}>
-                    {score === null ? "Not assessed" : score}
-                  </dd>
-                </div>
-              ))}
-            </dl>
-            {!news2.complete && (
-              <p className="mt-3 text-sm text-cyan-100">
-                Missing: {news2.missingParameters.join(", ")}. Unassessed parameters are not included in the total.
-              </p>
-            )}
-            {news2.criticalParameters.length > 0 && (
-              <p className="mt-2 font-bold text-red-300">
-                Score of 3: {news2.criticalParameters.join(", ")}
-              </p>
-            )}
-          </section>
-        )}
 
         {/* Receipt preview: large, shrinks while printing */}
         <div

@@ -400,7 +400,6 @@ export default function Home() {
                 rr={vitals.rr}
                 spo2={vitals.spo2}
                 temperature={vitals.temperature}
-                news2={news2 ?? undefined}
                 complaints={complaints}
                 clinic={clinic}
                 destination={destination}

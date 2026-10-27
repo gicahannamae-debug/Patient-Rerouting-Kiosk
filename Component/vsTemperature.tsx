@@ -30,8 +30,8 @@ export default function VsTemperature({
   onNavigateVitalPart,
 }: VsTemperatureProps) {
   const [temperature, setTemperature] = useState("");
-  const [alertTriggered, setAlertTriggered] = useState(false);
   const [keypadOpen, setKeypadOpen] = useState(false);
+  const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const isCebuano = language === "ceb";
 
   const temperatureValue = parseFloat(temperature);
@@ -42,52 +42,23 @@ export default function VsTemperature({
     return TEMPERATURE_CATEGORIES.find((item) => temperatureValue >= item.min && temperatureValue < item.max) ?? null;
   }, [temperatureValue, isValidTemperature]);
 
-  const criticalTempMessage = useMemo(() => {
-    if (!category) return null;
-    if (category.label === "🔴 CRITICAL LOW") return isCebuano ? "Ubos kaayo ang temperatura. Palihog adto dayon sa emergency room." : "Temperature is critically low. Please proceed to emergency care immediately.";
-    if (category.label === "🔴 CRITICAL HIGH") return isCebuano ? "Taas kaayo ang temperatura. Palihog adto dayon sa emergency room." : "Temperature is critically high. Please proceed to emergency care immediately.";
-    return null;
-  }, [category, isCebuano]);
-
-  const showCriticalTempOverlay = alertTriggered && !!criticalTempMessage;
-
   const updateTemperature = (value: string) => {
     if (value === ".") {
-      if (temperature.includes(".") || temperature.length >= 2) return;
-      setTemperature(`${temperature || "0"}.`);
+      // needs at least one digit, max two digits before the point, only one point
+      if (temperature.includes(".") || temperature.length === 0 || temperature.length > 2) return;
+      setTemperature(`${temperature}.`);
     } else if (temperature.includes(".")) {
-      if (temperature.split(".")[1].length >= 1 || temperature.length >= 4) return;
+      // only one decimal digit
+      if (temperature.split(".")[1].length >= 1) return;
       setTemperature(`${temperature}${value}`);
     } else {
       if (temperature.length >= 2) return;
       setTemperature(`${temperature}${value}`);
     }
-    setAlertTriggered(false);
   };
 
   return (
     <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
-      {showCriticalTempOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950 bg-opacity-95 p-6">
-          <div className="w-full max-w-4xl bg-red-600 border-4 border-white rounded-xl p-10 text-center shadow-2xl animate-pulse">
-            <h3 className="text-5xl font-extrabold mb-4">{isCebuano ? "ADTO DAYON SA EMERGENCY ROOM" : "IMMEDIATE ER REDIRECTION"}</h3>
-            <p className="text-2xl mb-5">{criticalTempMessage}</p>
-            <p className="text-3xl font-medium bg-red-950 px-6 py-5 rounded-lg inline-block">
-              {isCebuano ? "Kuhaa ang imong tiket ug adto dayon sa emergency room!" : "Please get your ticket and proceed immediately to the ER!"}
-            </p>
-            <button
-              onClick={() => {
-                setTemperature("");
-                setAlertTriggered(false);
-                setKeypadOpen(false);
-              }}
-              className="block mx-auto mt-8 text-base text-red-200 hover:underline opacity-70"
-            >
-              {isCebuano ? "Kanselahon / I-reset ang kiosk" : "Cancel / Reset Kiosk"}
-            </button>
-          </div>
-        </div>
-      )}
       <KioskHeader
         language={language}
         activeStep={4}
@@ -106,7 +77,7 @@ export default function VsTemperature({
 
         {/* ── CONTENT CARD ── */}
         <div className="flex flex-row gap-[1.2rem] bg-cyan-900 px-[2.5rem] py-[2rem] rounded-xl w-[70rem]">
-          
+
           {/* ── LEFT: Procedure Steps ── */}
           <div className="flex flex-col gap-[0.8rem] flex-1 border border-dashed border-cyan-600 rounded-lg p-[1.5rem]">
             <h2 className="text-[1.4rem] font-bold text-white">{isCebuano ? "Pamaagi" : "Procedure"}</h2>
@@ -145,10 +116,9 @@ export default function VsTemperature({
             <form
               onSubmit={(e) => {
                 e.preventDefault();
-                setAlertTriggered(true);
-                if (isValidTemperature && !criticalTempMessage) {
-                  onProceed?.({ temperature });
-                }
+                if (!isValidTemperature) return;
+                setKeypadOpen(false);
+                setShowConfirmPopup(true);
               }}
               className="flex flex-col gap-[1rem]"
             >
@@ -162,7 +132,11 @@ export default function VsTemperature({
                   readOnly
                   placeholder={isCebuano ? "Pislita aron mosulod" : "Tap to enter"}
                   value={temperature}
-                  onClick={() => setKeypadOpen(true)}
+                  onClick={() => {
+                    // Start fresh so old digits are never appended
+                    setTemperature("");
+                    setKeypadOpen(true);
+                  }}
                   aria-label={isCebuano ? "Temperatura sa Celsius" : "Temperature in Celsius"}
                   className={`text-[1rem] text-cyan-950 border ${keypadOpen ? "border-orange-400 ring-2 ring-orange-300" : "border-stone-300"} bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none cursor-pointer`}
                 />
@@ -181,10 +155,10 @@ export default function VsTemperature({
                     {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
                       <button key={digit} type="button" onClick={() => updateTemperature(digit)} className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 active:bg-orange-300">{digit}</button>
                     ))}
-                    <button type="button" onClick={() => { setTemperature(""); setAlertTriggered(false); }} className="min-h-14 rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-500">{isCebuano ? "Haw-asa" : "Clear"}</button>
+                    <button type="button" onClick={() => setTemperature("")} className="min-h-14 rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-500">{isCebuano ? "Haw-asa" : "Clear"}</button>
                     <button type="button" onClick={() => updateTemperature("0")} className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200">0</button>
                     <button type="button" onClick={() => updateTemperature(".")} className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200">.</button>
-                    <button type="button" onClick={() => { setTemperature((value) => value.slice(0, -1)); setAlertTriggered(false); }} aria-label={isCebuano ? "Tangtanga ang kataposang numero" : "Delete last digit"} className="col-span-3 min-h-14 rounded-lg bg-cyan-700 text-xl font-bold text-white hover:bg-cyan-600">⌫</button>
+                    <button type="button" onClick={() => setTemperature((value) => value.slice(0, -1))} aria-label={isCebuano ? "Tangtanga ang kataposang numero" : "Delete last digit"} className="col-span-3 min-h-14 rounded-lg bg-cyan-700 text-xl font-bold text-white hover:bg-cyan-600">⌫</button>
                   </div>
                 </section>
               )}
@@ -205,9 +179,11 @@ export default function VsTemperature({
                       <p className="text-[0.95rem]">{isCebuano ? "Resulta" : "Result"}: <span className="font-bold text-white">{category ? (isCebuano ? ({
                         "🔴 CRITICAL LOW": "🔴 UBOS KAAYO",
                         Hypothermia: "Ubos kaayo ang temperatura sa lawas",
+                        "Below normal": "Ubos sa normal",
                         Normal: "Normal",
+                        Elevated: "Medyo Taas",
                         "Low-grade Fever": "Gamay nga Hilanat",
-                        "Moderate Fever": "Kasagarang Hilanat",
+                        "High Fever": "Taas nga Hilanat",
                         "🔴 CRITICAL HIGH": "🔴 TAAS KAAYO",
                       }[category.label] ?? category.label) : category.label) : "Unknown"}</span></p>
                     </>
@@ -220,6 +196,58 @@ export default function VsTemperature({
                 <button type="submit" className="text-[1.1rem] font-semibold bg-orange-50 text-cyan-950 px-[2.5rem] py-[0.5rem] rounded-md hover:bg-orange-100 cursor-pointer">{isCebuano ? "Padayon" : "Proceed"}</button>
               </div>
             </form>
+
+            {/* POP UP: CONFIRMATION */}
+            {showConfirmPopup && (
+              <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-6">
+                <div className="w-full max-w-xl rounded-2xl border-2 border-cyan-500 bg-cyan-950 p-8 text-center shadow-2xl">
+                  <h3 className="mb-4 text-3xl font-extrabold text-white">
+                    {isCebuano ? "Kumpirmaha ang Temperatura" : "Confirm Temperature"}
+                  </h3>
+
+                  <p className="mb-6 text-lg text-cyan-200">
+                    {isCebuano
+                      ? "Siguroha nga parehas kini nga numero sa gipakita sa thermometer."
+                      : "Please verify that this reading matches the value displayed on the thermometer."}
+                  </p>
+
+                  <div className="mb-6 rounded-xl border border-cyan-600 bg-cyan-900 p-5">
+                    <p className="mb-2 text-sm font-semibold text-cyan-200">
+                      {isCebuano ? "TEMPERATURA" : "TEMPERATURE"}
+                    </p>
+                    <p className="text-5xl font-extrabold text-white">
+                      {temperatureValue.toFixed(1)} <span className="text-xl">°C</span>
+                    </p>
+                  </div>
+
+                  <p className="mb-6 text-base text-yellow-300">
+                    {isCebuano ? "Husto ba kini nga numero?" : "Is this value correct?"}
+                  </p>
+
+                  <div className="flex flex-col justify-center gap-3 sm:flex-row">
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPopup(false)}
+                      className="rounded-lg bg-stone-200 px-6 py-3 text-lg font-bold text-cyan-950 hover:bg-stone-300"
+                    >
+                      {isCebuano ? "Balik" : "Go Back"}
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowConfirmPopup(false);
+                        onProceed?.({ temperature: temperatureValue.toFixed(1) });
+                      }}
+                      className="rounded-lg bg-orange-50 px-6 py-3 text-lg font-bold text-cyan-950 hover:bg-orange-100"
+                    >
+                      {isCebuano ? "Oo, Kumpirmaha" : "Yes, Confirm"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+
           </div>
         </div>
       </div>

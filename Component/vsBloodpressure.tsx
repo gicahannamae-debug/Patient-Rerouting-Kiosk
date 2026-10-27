@@ -12,13 +12,15 @@ const BP_CATEGORIES = [
   { label: "Normal", range: "SBP 90–120 and DBP 60–80", predicate: (s: number, d: number) => s >= 90 && s <= 120 && d >= 60 && d <= 80, color: "bg-green-400" },
 ];
 
+type BpField = "systolic" | "diastolic";
+
 interface VsBloodpressureProps {
   language: KioskLanguage;
   onLogout?: () => void;
   onProceed?: (values: { bpSys: string; bpDia: string }) => void;
   onNavigateStep?: (step: number) => void;
   onNavigateVitalPart?: (part: number) => void;
-  /** Which vital-sign part this page is (1 = BP). Use 2 / 3 on the RR&O2 and Temp pages. */
+  /** Which vital-sign part this page is (1 = BP). */
   part?: number;
 }
 
@@ -32,7 +34,9 @@ export default function VsBloodpressure({
 }: VsBloodpressureProps) {
   const [systolic, setSystolic] = useState("");
   const [diastolic, setDiastolic] = useState("");
-  const [alertTriggered, setAlertTriggered] = useState(false);
+  const [activeField, setActiveField] = useState<BpField | null>(null);
+  const [showConfirmPopup, setShowConfirmPopup] = useState(false);
+  const [showValidationPopup, setShowValidationPopup] = useState(false);
   const isCebuano = language === "ceb";
 
   const systolicValue = parseFloat(systolic);
@@ -45,89 +49,37 @@ export default function VsBloodpressure({
     return BP_CATEGORIES.find((item) => item.predicate(systolicValue, diastolicValue)) ?? null;
   }, [systolicValue, diastolicValue, isValidSystolic, isValidDiastolic]);
 
-  const criticalBpMessage = useMemo(() => {
-    if (!bpCategory) return null;
-    if (bpCategory.label === "🔴 SEVERE HYPOTENSION") return isCebuano ? "Delikado kaayo kaubos ang presyon sa dugo. Palihog adto dayon sa emergency room." : "Blood pressure is dangerously low. Please proceed to emergency care immediately.";
-    if (bpCategory.label === "🔴 HYPERTENSIVE CRISIS") return isCebuano ? "Krisis sa presyon sa dugo. Palihog adto dayon sa emergency room." : "Blood pressure is in a hypertensive crisis. Please proceed to emergency care immediately.";
-    return null;
-  }, [bpCategory, isCebuano]);
-
-  const showCriticalBpOverlay = alertTriggered && !!criticalBpMessage;
-
-  //ADDED 10-14-2026
-  const [activeField, setActiveField] = useState<
-    "systolic" | "diastolic" | null
-  >(null);
+  // ── Keypad helpers ──
+  const selectField = (field: BpField) => {
+    // Start fresh every time a field is tapped so old digits are never appended
+    setActiveField(field);
+    if (field === "systolic") setSystolic("");
+    else setDiastolic("");
+  };
 
   const updateActiveValue = (digit: string) => {
     if (!activeField) return;
 
     const current = activeField === "systolic" ? systolic : diastolic;
-
-    // Allow up to 3 digits only.
-    if (current.length >= 3) return;
+    if (current.length >= 3) return; // up to 3 digits only
 
     const nextValue = current + digit;
-
-    if (activeField === "systolic") {
-      setSystolic(nextValue);
-    } else {
-      setDiastolic(nextValue);
-    }
-
-    setAlertTriggered(false);
+    if (activeField === "systolic") setSystolic(nextValue);
+    else setDiastolic(nextValue);
   };
 
   const clearActiveValue = () => {
-    if (activeField === "systolic") {
-      setSystolic("");
-    } else if (activeField === "diastolic") {
-      setDiastolic("");
-    }
-
-    setAlertTriggered(false);
+    if (activeField === "systolic") setSystolic("");
+    else if (activeField === "diastolic") setDiastolic("");
   };
 
   const backspaceActiveValue = () => {
-    if (activeField === "systolic") {
-      setSystolic((previous) => previous.slice(0, -1));
-    } else if (activeField === "diastolic") {
-      setDiastolic((previous) => previous.slice(0, -1));
-    }
-
-    setAlertTriggered(false);
+    if (activeField === "systolic") setSystolic((previous) => previous.slice(0, -1));
+    else if (activeField === "diastolic") setDiastolic((previous) => previous.slice(0, -1));
   };
-
-  const [showConfirmPopup, setShowConfirmPopup] = useState(false);
-
-  const [showValidationPopup, setShowValidationPopup] = useState(false);
-
-  //END OF ADDED 10-14-2026
 
   return (
     <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
-      {showCriticalBpOverlay && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-red-950 bg-opacity-95 p-6">
-          <div className="w-full max-w-4xl bg-red-600 border-4 border-white rounded-xl p-10 text-center shadow-2xl animate-pulse">
-            <h3 className="text-5xl font-extrabold mb-4">{isCebuano ? "ADTO DAYON SA EMERGENCY ROOM" : "IMMEDIATE ER REDIRECTION"}</h3>
-            <p className="text-2xl mb-5">{criticalBpMessage}</p>
-            <p className="text-3xl font-medium bg-red-950 px-6 py-5 rounded-lg inline-block">
-              {isCebuano ? "Kuhaa ang imong tiket ug adto dayon sa emergency room!" : "Please get your ticket and proceed immediately to the ER!"}
-            </p>
-            <button
-              onClick={() => {
-                setSystolic("");
-                setDiastolic("");
-                setAlertTriggered(false);
-              }}
-              className="block mx-auto mt-8 text-base text-red-200 hover:underline opacity-70"
-            >
-              {isCebuano ? "Kanselahon / I-reset ang kiosk" : "Cancel / Reset Kiosk"}
-            </button>
-          </div>
-        </div>
-      )}
-
       <KioskHeader
         language={language}
         activeStep={4}
@@ -139,7 +91,6 @@ export default function VsBloodpressure({
 
       {/* MAIN */}
       <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-6xl mx-auto w-full">
-        {/* Heading (same as Safety Check) */}
         <div className="text-center w-full mb-6">
           <h2 className="text-5xl font-bold text-white">{isCebuano ? "Pagsukod sa mga Vital Sign" : "Vital Sign Measurement"}</h2>
           <p className="text-2xl text-cyan-200 mt-2">{isCebuano ? "Presyon sa Dugo sa Pasyente (BP)" : "Patient Blood Pressure (BP)"}</p>
@@ -189,14 +140,12 @@ export default function VsBloodpressure({
                 e.preventDefault();
 
                 if (!isValidSystolic || !isValidDiastolic) {
-                  setAlertTriggered(false);
                   setShowConfirmPopup(false);
                   setShowValidationPopup(true);
                   return;
                 }
 
                 setShowValidationPopup(false);
-                setAlertTriggered(false);
                 setShowConfirmPopup(true);
               }}
               className="flex flex-col gap-[1rem] bg-cyan-950 rounded-2xl p-[1rem]"
@@ -211,12 +160,9 @@ export default function VsBloodpressure({
                   readOnly
                   placeholder={isCebuano ? "Pislita aron mosulod" : "Tap to enter"}
                   value={systolic}
-                  onClick={() => setActiveField("systolic")}
+                  onClick={() => selectField("systolic")}
                   aria-label="Systolic blood pressure in mmHg"
-                  className={`w-full text-[1rem] text-cyan-950 border ${activeField === "systolic"
-                    ? "border-orange-400 ring-2 ring-orange-300"
-                    : "border-stone-300"
-                    } bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] cursor-pointer focus:outline-none`}
+                  className={`w-full text-[1rem] text-cyan-950 border ${activeField === "systolic" ? "border-orange-400 ring-2 ring-orange-300" : "border-stone-300"} bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] cursor-pointer focus:outline-none`}
                 />
               </section>
 
@@ -230,18 +176,14 @@ export default function VsBloodpressure({
                   readOnly
                   placeholder={isCebuano ? "Pislita aron mosulod" : "Tap to enter"}
                   value={diastolic}
-                  onClick={() => setActiveField("diastolic")}
+                  onClick={() => selectField("diastolic")}
                   aria-label="Diastolic blood pressure in mmHg"
-                  className={`w-full text-[1rem] text-cyan-950 border ${activeField === "diastolic"
-                    ? "border-orange-400 ring-2 ring-orange-300"
-                    : "border-stone-300"
-                    } bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] cursor-pointer focus:outline-none`}
+                  className={`w-full text-[1rem] text-cyan-950 border ${activeField === "diastolic" ? "border-orange-400 ring-2 ring-orange-300" : "border-stone-300"} bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] cursor-pointer focus:outline-none`}
                 />
               </section>
 
-              {
-              // NUMPAD UI 10-14-2026
-              activeField && (
+              {/* NUMPAD UI */}
+              {activeField && (
                 <section className="rounded-xl border border-cyan-600 bg-cyan-900 p-4">
                   <div className="mb-3 flex items-center justify-between gap-2">
                     <h3 className="text-lg font-bold text-white">
@@ -264,18 +206,16 @@ export default function VsBloodpressure({
                   </div>
 
                   <div className="grid grid-cols-3 gap-2">
-                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(
-                      (digit) => (
-                        <button
-                          key={digit}
-                          type="button"
-                          onClick={() => updateActiveValue(digit)}
-                          className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 active:bg-orange-300"
-                        >
-                          {digit}
-                        </button>
-                      )
-                    )}
+                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+                      <button
+                        key={digit}
+                        type="button"
+                        onClick={() => updateActiveValue(digit)}
+                        className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 active:bg-orange-300"
+                      >
+                        {digit}
+                      </button>
+                    ))}
 
                     <button
                       type="button"
@@ -304,7 +244,6 @@ export default function VsBloodpressure({
                   </div>
                 </section>
               )}
-
 
               {/* Patient Blood Pressure Results */}
               <div className="flex flex-col gap-[0.75rem]">
@@ -335,9 +274,8 @@ export default function VsBloodpressure({
                 </div>
               </div>
 
-              {
-              // POP UP FOR CONFIRMATION OF BLOOD PRESSURE READINGS 10-14-2026
-              showValidationPopup && (
+              {/* POP UP: INVALID READINGS */}
+              {showValidationPopup && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/70 p-6">
                   <div className="w-full max-w-xl rounded-2xl border-2 border-red-500 bg-cyan-950 p-8 text-center shadow-2xl">
                     <h3 className="mb-4 text-3xl font-extrabold text-red-400">
@@ -376,7 +314,7 @@ export default function VsBloodpressure({
                       type="button"
                       onClick={() => {
                         setShowValidationPopup(false);
-                        setActiveField(!isValidSystolic ? "systolic" : "diastolic");
+                        selectField(!isValidSystolic ? "systolic" : "diastolic");
                       }}
                       className="rounded-lg bg-orange-50 px-8 py-3 text-lg font-bold text-cyan-950 hover:bg-orange-100"
                     >
@@ -386,9 +324,8 @@ export default function VsBloodpressure({
                 </div>
               )}
 
-              {
-              // POP UP FOR CONFIRMATION OF BLOOD PRESSURE 10-14-2026
-              showConfirmPopup && (
+              {/* POP UP: CONFIRMATION */}
+              {showConfirmPopup && (
                 <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/70 p-6">
                   <div className="w-full max-w-xl rounded-2xl border-2 border-cyan-500 bg-cyan-950 p-8 text-center shadow-2xl">
                     <h3 className="mb-4 text-3xl font-extrabold text-white">
@@ -403,18 +340,14 @@ export default function VsBloodpressure({
 
                     <div className="mb-6 grid grid-cols-2 gap-4">
                       <div className="rounded-xl border border-cyan-600 bg-cyan-900 p-5">
-                        <p className="mb-2 text-sm font-semibold text-cyan-200">
-                          SYSTOLIC
-                        </p>
+                        <p className="mb-2 text-sm font-semibold text-cyan-200">SYSTOLIC</p>
                         <p className="text-4xl font-extrabold text-white">
                           {systolic} <span className="text-lg">mmHg</span>
                         </p>
                       </div>
 
                       <div className="rounded-xl border border-cyan-600 bg-cyan-900 p-5">
-                        <p className="mb-2 text-sm font-semibold text-cyan-200">
-                          DIASTOLIC
-                        </p>
+                        <p className="mb-2 text-sm font-semibold text-cyan-200">DIASTOLIC</p>
                         <p className="text-4xl font-extrabold text-white">
                           {diastolic} <span className="text-lg">mmHg</span>
                         </p>
@@ -438,17 +371,7 @@ export default function VsBloodpressure({
                         type="button"
                         onClick={() => {
                           setShowConfirmPopup(false);
-
-                          if (criticalBpMessage) {
-                            // Show the emergency alert only after confirmation.
-                            setAlertTriggered(true);
-                            return;
-                          }
-
-                          onProceed?.({
-                            bpSys: systolic,
-                            bpDia: diastolic,
-                          });
+                          onProceed?.({ bpSys: systolic, bpDia: diastolic });
                         }}
                         className="rounded-lg bg-orange-50 px-6 py-3 text-lg font-bold text-cyan-950 hover:bg-orange-100"
                       >
@@ -458,7 +381,6 @@ export default function VsBloodpressure({
                   </div>
                 </div>
               )}
-
 
               {/* Buttons */}
               <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">

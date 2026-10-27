@@ -155,7 +155,19 @@ function QueueStatusBadge({ status }: { status: string | undefined }) {
 
 // ─── Small components ─────────────────────────────────────────────────────────
 
-function VitalsGrid({ vitals, large = false }: { vitals?: Vitals | null; large?: boolean }) {
+function VitalsGrid({
+  vitals,
+  large = false,
+  stacked = false,
+  twoCol = false,
+  emergency = false,
+}: {
+  vitals?: Vitals | null;
+  large?: boolean;
+  stacked?: boolean;
+  twoCol?: boolean;
+  emergency?: boolean;
+}) {
   const items = [
     { label: 'BP', value: vitals?.bp ?? '—', unit: 'mmHg' },
     { label: 'HR', value: vitals?.hr != null ? String(vitals.hr) : '—', unit: 'bpm' },
@@ -163,13 +175,26 @@ function VitalsGrid({ vitals, large = false }: { vitals?: Vitals | null; large?:
     { label: 'Temp', value: vitals?.temp != null ? vitals.temp.toFixed(1) : '—', unit: '°C' },
     { label: 'SpO₂', value: vitals?.spo2 != null ? String(vitals.spo2) : '—', unit: '%' },
   ];
+
+  const cols = stacked ? 'grid-cols-1' : twoCol ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-5';
+
   return (
-    <div className={`grid grid-cols-2 sm:grid-cols-5 ${large ? 'gap-3' : 'gap-2'}`}>
+    <div className={`grid ${cols} ${large ? 'gap-3' : 'gap-2'}`}>
       {items.map(v => (
-        <div key={v.label} className={`rounded-xl bg-slate-900/60 border border-cyan-800/60 ${large ? 'px-4 py-3' : 'px-2 py-1.5'}`}>
-          <p className="text-[10px] font-bold uppercase tracking-wider text-cyan-400">{v.label}</p>
-          <p className={`${large ? 'text-2xl' : 'text-sm'} font-black text-white leading-tight`}>
-            {v.value} <span className="text-xs font-medium text-slate-400">{v.unit}</span>
+        <div
+          key={v.label}
+          className={`rounded-xl border ${large ? 'px-4 py-3' : 'px-2 py-1.5'} ${
+            emergency
+              ? 'border-red-500/70 bg-red-950/50'
+              : 'border-cyan-800/60 bg-slate-900/60'
+          }`}
+        >
+          <p className={`text-xs font-bold uppercase tracking-wider ${emergency ? 'text-red-300' : 'text-cyan-400'}`}>
+            {v.label}
+          </p>
+          <p className={`${large ? 'text-3xl' : 'text-sm'} font-black leading-tight ${emergency ? 'text-red-100' : 'text-white'}`}>
+            {v.value}{' '}
+            <span className={`text-sm font-medium ${emergency ? 'text-red-300/80' : 'text-slate-400'}`}>{v.unit}</span>
           </p>
         </div>
       ))}
@@ -182,6 +207,33 @@ function Field({ label, value }: { label: string; value: React.ReactNode }) {
     <div>
       <p className="text-xs text-slate-400 uppercase tracking-wider">{label}</p>
       <p className="text-2xl font-bold text-white">{value}</p>
+    </div>
+  );
+}
+
+function DetailTile({
+  label,
+  value,
+  emergency = false,
+  className = '',
+}: {
+  label: string;
+  value: React.ReactNode;
+  emergency?: boolean;
+  className?: string;
+}) {
+  return (
+    <div
+      className={`rounded-xl border px-4 py-3 ${
+        emergency ? 'border-red-500/50 bg-red-950/40' : 'border-amber-900/60 bg-slate-900/70'
+      } ${className}`}
+    >
+      <dt className={`text-xs font-bold uppercase tracking-wider ${emergency ? 'text-red-300' : 'text-slate-400'}`}>
+        {label}
+      </dt>
+      <dd className={`mt-1 break-words text-xl font-bold leading-snug ${emergency ? 'text-red-50' : 'text-white'}`}>
+        {value}
+      </dd>
     </div>
   );
 }
@@ -433,26 +485,6 @@ function PatientDetailsPopup({
             </div>
             <div className="p-3 sm:p-4">
               <VitalsGrid vitals={patient.vitals} large />
-              {patient.news2 && (
-                <div className="mt-3 rounded-xl border border-cyan-800/80 bg-cyan-950/30 p-3 sm:p-4">
-                  <p className="font-bold text-cyan-300">
-                    NEWS2: {patient.news2.total} · {patient.news2.route}
-                  </p>
-                  <p className="mt-2 text-sm text-slate-300">
-                    {patient.news2.complete ? "Assessment complete" : "Partial assessment"}.
-                    {" "}Respiratory rate: {patient.news2.components.respiratoryRate ?? "—"}.
-                    {" "}Oxygen saturation: {patient.news2.components.oxygenSaturation ?? "—"}.
-                    {" "}Systolic BP: {patient.news2.components.systolicBloodPressure ?? "—"}.
-                    {" "}Pulse: {patient.news2.components.pulseRate ?? "—"}.
-                    {" "}Temperature: {patient.news2.components.temperature ?? "—"}.
-                  </p>
-                  {patient.news2.criticalParameters.length > 0 && (
-                    <p className="mt-2 font-bold text-red-300">
-                      Critical parameters: {patient.news2.criticalParameters.join(", ")}
-                    </p>
-                  )}
-                </div>
-              )}
             </div>
           </section>
 
@@ -682,24 +714,6 @@ function NowServingBanner({ patient, onFinish, onCallNext, hasWaiting }: {
           <div className="mt-6">
             <p className="text-xs text-slate-400 uppercase tracking-wider mb-2">Vitals</p>
             <VitalsGrid vitals={patient?.vitals} large />
-            {patient?.news2 && (
-              <div className="mt-3 rounded-xl border border-cyan-800/60 bg-slate-900/60 px-4 py-3">
-                <p className="font-bold text-cyan-300">
-                  NEWS2 {patient.news2.complete ? "Complete" : "Partial"}: {patient.news2.total} · {patient.news2.route}
-                </p>
-                <p className="mt-1 text-xs text-slate-300">
-                  RR {patient.news2.components.respiratoryRate ?? "—"} · SpO₂ {patient.news2.components.oxygenSaturation ?? "—"} ·
-                  SBP {patient.news2.components.systolicBloodPressure ?? "—"} · Pulse {patient.news2.components.pulseRate ?? "—"} ·
-                  Consciousness {patient.news2.components.consciousness ?? "—"} · Temp {patient.news2.components.temperature ?? "—"} ·
-                  Oxygen {patient.news2.components.supplementalOxygen ?? "—"}
-                </p>
-                {patient.news2.criticalParameters.length > 0 && (
-                  <p className="mt-1 text-sm font-bold text-red-300">
-                    Score of 3: {patient.news2.criticalParameters.join(", ")}
-                  </p>
-                )}
-              </div>
-            )}
           </div>
 
         </div>
@@ -734,7 +748,7 @@ function NowServingBanner({ patient, onFinish, onCallNext, hasWaiting }: {
 function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
   clinic: Clinic;
   allPatients: Patient[];
-  onUpdate: (patients: Patient[]) => void;
+  onUpdate: (patients: Patient[]) => Promise<string | null>;
   newlyAddedPatientIds: Set<string>;
 }) {
   const myPatients = allPatients.filter(p => p.clinic === clinic.code && (p.status === 'waiting' || p.status === 'serving'));
@@ -744,9 +758,15 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
   const [categoryFilter, setCategoryFilter] = useState<'ALL' | Category>('ALL');
   const [sortOrder, setSortOrder] = useState<'NEWEST' | 'OLDEST' | 'PRIORITY'>('NEWEST');
   const [confirmFinish, setConfirmFinish] = useState<Patient | null>(null);
+  const [finishError, setFinishError] = useState("");
+  const [finishingVisit, setFinishingVisit] = useState(false);
   const [confirmCancel, setConfirmCancel] = useState<Patient | null>(null);
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [popupMinimized, setPopupMinimized] = useState(false);
+
+  // Call-patient state: tracks an in-flight call and any error to show staff.
+  const [callingId, setCallingId] = useState<string | null>(null);
+  const [callError, setCallError] = useState("");
 
   const [transferNotice, setTransferNotice] = useState("");
   const [currentDateTime, setCurrentDateTime] = useState<Date | null>(null);
@@ -898,28 +918,47 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
 
 
 
-  function handleCallPatient(patient: Patient) {
-    if (serving || patient.status !== "waiting") return;
+  async function handleCallPatient(patient: Patient) {
+    if (serving || callingId) {
+      console.warn("[call] blocked: already serving or call in progress", { serving, callingId });
+      return;
+    }
 
-    const currentPatient = allPatients.find(
-      p => p.id === patient.id
-    );
+    const currentPatient = allPatients.find(p => p.id === patient.id);
 
     if (
       !currentPatient ||
       currentPatient.status !== "waiting" ||
       currentPatient.clinic !== clinic.code
     ) {
+      console.warn("[call] blocked: guard failed", {
+        found: !!currentPatient,
+        status: currentPatient?.status,
+        patientClinic: currentPatient?.clinic,
+        dashboardClinic: clinic.code,
+      });
+      setCallError("This patient can't be called (status or clinic mismatch). Check the console.");
       return;
     }
 
-    onUpdate(
+    setCallingId(currentPatient.id);
+    setCallError("");
+
+    const error = await onUpdate(
       allPatients.map(p =>
         p.id === currentPatient.id
           ? { ...p, status: "serving" as const }
           : p
       )
     );
+
+    setCallingId(null);
+
+    if (error) {
+      console.error("[call] persist failed:", error);
+      setCallError(`Could not call patient: ${error}`);
+      return;
+    }
 
     setSelectedPatient(null);
     setPopupMinimized(false);
@@ -941,7 +980,7 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
     setPopupMinimized(false);
   }
 
-  function handleFinish(patient: Patient) {
+  async function handleFinish(patient: Patient) {
     const currentPatient = allPatients.find(p => p.id === patient.id);
 
     if (!currentPatient || currentPatient.status === "done") {
@@ -949,27 +988,38 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
       return;
     }
 
-    onUpdate(
-      allPatients.map(p =>
-        p.id === currentPatient.id
-          ? {
-            ...p,
-            status: "done" as const,
-            completedAt: new Date().toISOString(),
-          }
-          : p
-      )
-    );
+    setFinishingVisit(true);
+    setFinishError("");
+    try {
+      const error = await onUpdate(
+        allPatients.map(p =>
+          p.id === currentPatient.id
+            ? {
+              ...p,
+              status: "done" as const,
+              completedAt: new Date().toISOString(),
+            }
+            : p
+        )
+      );
+      if (error) {
+        setFinishError(error);
+        return;
+      }
 
-    setConfirmFinish(null);
-    setSelectedPatient(current =>
-      current?.id === patient.id ? null : current
-    );
-    setPopupMinimized(false);
+      setConfirmFinish(null);
+      setSelectedPatient(current =>
+        current?.id === patient.id ? null : current
+      );
+      setPopupMinimized(false);
+    } finally {
+      setFinishingVisit(false);
+    }
   }
 
 
   const isER = clinic.isER;
+  const isEmergency = serving?.category === 'EMERGENCY';
 
   return (
     <div className="text-slate-100">
@@ -1095,11 +1145,17 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
           </div>
         )}
 
-
+        {callError && (
+          <div role="alert" className="rounded-2xl border border-red-700 bg-red-950/60 px-4 py-3 text-sm text-red-200">
+            {callError}
+          </div>
+        )}
 
         <section
           className={`relative overflow-hidden rounded-2xl border shadow-xl transition-all duration-500 ${serving
-            ? "border-cyan-400/80 bg-slate-900 shadow-cyan-500/15 ring-1 ring-cyan-400/20"
+            ? isEmergency
+              ? "border-red-500/80 bg-slate-900 shadow-red-500/20 ring-1 ring-red-500/30"
+              : "border-cyan-400/80 bg-slate-900 shadow-cyan-500/15 ring-1 ring-cyan-400/20"
             : "border-slate-700 bg-slate-900"
             }`}
         >
@@ -1107,19 +1163,27 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
           {serving && (
             <div
               aria-hidden="true"
-              className="pointer-events-none absolute -inset-1 animate-pulse rounded-2xl bg-cyan-400/5 blur-xl"
+              className={`pointer-events-none absolute -inset-1 animate-pulse rounded-2xl blur-xl ${isEmergency ? "bg-red-500/10" : "bg-cyan-400/5"}`}
             />
           )}
 
           <div className="relative">
             {/* High-contrast Now Serving header */}
-            <div className={`flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5 ${serving ? "border-cyan-400/30 bg-gradient-to-r from-cyan-950/90 via-slate-900 to-slate-900" : "border-slate-700 bg-slate-950/50"}`}>
+            <div className={`flex flex-wrap items-center justify-between gap-3 border-b px-4 py-3 sm:px-5 ${serving
+              ? isEmergency
+                ? "border-red-500/40 bg-gradient-to-r from-red-950/90 via-slate-900 to-slate-900"
+                : "border-cyan-400/30 bg-gradient-to-r from-cyan-950/90 via-slate-900 to-slate-900"
+              : "border-slate-700 bg-slate-950/50"}`}>
               <div className="flex items-center gap-3">
-                <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${serving ? "border-cyan-300/50 bg-cyan-400/15 text-cyan-200" : "border-slate-700 bg-slate-800 text-slate-400"}`}>
+                <div className={`flex h-10 w-10 items-center justify-center rounded-xl border ${serving
+                  ? isEmergency
+                    ? "border-red-400/50 bg-red-500/15 text-red-200"
+                    : "border-cyan-300/50 bg-cyan-400/15 text-cyan-200"
+                  : "border-slate-700 bg-slate-800 text-slate-400"}`}>
                   <span className="text-xl font-black">{serving ? "#" : "—"}</span>
                 </div>
                 <div>
-                  <h2 className={`text-xl font-black tracking-wide ${serving ? "text-cyan-100" : "text-white"}`}>NOW SERVING</h2>
+                  <h2 className={`text-xl font-black tracking-wide ${serving ? (isEmergency ? "text-red-100" : "text-cyan-100") : "text-white"}`}>NOW SERVING</h2>
                   <p className="mt-0.5 text-xs text-slate-400">Patient consultation & clinical information</p>
                 </div>
               </div>
@@ -1146,133 +1210,111 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
             </div>
 
             {serving ? (
-              <div className="space-y-3 p-3 sm:p-4">
-                {/* Compact patient banner: ticket, identity and age group together */}
-                <div className="grid grid-cols-1 gap-3 rounded-xl border border-cyan-400/30 bg-gradient-to-r from-slate-950 via-slate-950 to-cyan-950/40 p-3 sm:grid-cols-[minmax(150px,0.65fr)_minmax(0,2fr)] sm:items-center">
-                  <div className={`flex min-h-24 flex-col justify-center rounded-lg border px-4 py-3 ${CAT_STYLE[serving.category].badge} border-white/10`}>
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em] opacity-80">Ticket Number</p>
-                    <p className="mt-1 break-words text-4xl font-black leading-none tracking-tight sm:text-5xl">{displayNumber(serving.ticketCode)}</p>
-                    <p className="mt-2 text-xs font-bold uppercase tracking-wide">{serving.category || "Uncategorized"}</p>
+              <div className="space-y-4 p-4 sm:p-5">
+                {/* Ticket + identity */}
+                <div className={`grid grid-cols-1 gap-4 rounded-xl border p-4 sm:grid-cols-[minmax(180px,0.7fr)_minmax(0,2fr)] sm:items-center ${
+                  isEmergency
+                    ? 'border-red-500/60 bg-gradient-to-r from-red-950/70 via-slate-950 to-red-950/40'
+                    : 'border-cyan-400/30 bg-gradient-to-r from-slate-950 via-slate-950 to-cyan-950/40'
+                }`}>
+                  <div className={`flex min-h-28 flex-col justify-center rounded-lg border border-white/10 px-5 py-4 ${CAT_STYLE[serving.category].badge}`}>
+                    <p className="text-[11px] font-black uppercase tracking-[0.2em] opacity-80">Ticket Number</p>
+                    <p className="mt-1 break-words text-5xl font-black leading-none tracking-tight sm:text-6xl">{displayNumber(serving.ticketCode)}</p>
+                    <p className="mt-2 text-sm font-bold uppercase tracking-wide">{serving.category || 'Uncategorized'}</p>
                     <div className="mt-3"><QueueStatusBadge status={serving.status} /></div>
                   </div>
 
                   <div className="min-w-0">
-                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-2">
+                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
                       <div className="min-w-0 flex-1">
-                        <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-cyan-300">Current Patient</p>
-                        <h3 className="mt-0.5 break-words text-xl font-black leading-tight text-white sm:text-2xl">{serving.name || "Unnamed Patient"}</h3>
-                        <p className="mt-1 text-sm text-slate-300">Age: {serving.ageDisplay || serving.age || "Not specified"} <span className="text-slate-600">·</span> Sex: {serving.sex || "Not specified"}</p>
+                        <p className={`text-xs font-bold uppercase tracking-[0.18em] ${isEmergency ? 'text-red-300' : 'text-cyan-300'}`}>Current Patient</p>
+                        <h3 className="mt-1 break-words text-3xl font-black leading-tight text-white sm:text-4xl">{serving.name || 'Unnamed Patient'}</h3>
+                        <p className="mt-2 text-lg text-slate-200">
+                          Age: <span className="font-bold">{serving.ageDisplay || serving.age || 'Not specified'}</span>
+                          <span className="mx-2 text-slate-600">·</span>
+                          Sex: <span className="font-bold">{serving.sex || 'Not specified'}</span>
+                        </p>
                       </div>
-                      <div className="min-w-[120px] rounded-lg border border-violet-400/25 bg-violet-950/30 px-3 py-2">
-                        <p className="text-[10px] font-bold uppercase tracking-wider text-violet-300">Age Group</p>
-                        <p className="mt-0.5 text-sm font-bold text-white">{serving.ageGroup || "Not specified"}</p>
+                      <div className="min-w-[150px] rounded-lg border border-violet-400/30 bg-violet-950/30 px-4 py-3">
+                        <p className="text-xs font-bold uppercase tracking-wider text-violet-300">Age Group</p>
+                        <p className="mt-1 text-lg font-bold text-white">{serving.ageGroup || 'Not specified'}</p>
                       </div>
                     </div>
-                    <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 border-t border-slate-800 pt-2 text-xs text-slate-400">
-                      <span>Queue: {serving.ticketCode || "Not available"}</span>
-                      <span>Contact: {serving.contactNumber || "Not provided"}</span>
+                    <div className="mt-3 flex flex-wrap gap-x-6 gap-y-1 border-t border-slate-800 pt-3 text-sm text-slate-300">
+                      <span>Queue: <span className="font-semibold text-white">{serving.ticketCode || 'Not available'}</span></span>
+                      <span>Contact: <span className="font-semibold text-white">{serving.contactNumber || 'Not provided'}</span></span>
+                      <span>Arrived: <span className="font-semibold text-white">{formatDateTime(serving.arrivedAt)}</span></span>
                     </div>
                   </div>
                 </div>
 
-                {/* Clinical details are emphasized and arranged compactly */}
-                <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-                  <section className="min-w-0 rounded-xl border border-amber-400/40 border-l-4 border-l-amber-400 bg-slate-950/70 p-3 sm:p-4">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-amber-400" />
-                      <h3 className="text-xs font-black uppercase tracking-[0.14em] text-amber-200">Chief Complaints</h3>
+                {/* Clinical details */}
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(320px,1fr)]">
+                  <section className={`min-w-0 rounded-xl border border-l-4 p-4 sm:p-5 ${
+                    isEmergency
+                      ? 'border-red-500/60 border-l-red-500 bg-red-950/30'
+                      : 'border-amber-400/40 border-l-amber-400 bg-slate-950/70'
+                  }`}>
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className={`h-3 w-3 rounded-full ${isEmergency ? 'animate-pulse bg-red-500' : 'bg-amber-400'}`} />
+                      <h3 className={`text-sm font-black uppercase tracking-[0.14em] ${isEmergency ? 'text-red-200' : 'text-amber-200'}`}>
+                        Complaint Details
+                      </h3>
+                      <span className={`ml-auto rounded-full border px-2.5 py-1 text-xs font-bold ${
+                        isEmergency ? 'border-red-500/60 bg-red-950/60 text-red-200' : 'border-amber-800/70 bg-amber-950/50 text-amber-200'
+                      }`}>
+                        {serving.chiefComplaints.length} recorded
+                      </span>
                     </div>
-                    <div className="whitespace-pre-wrap break-words text-sm font-medium leading-5 text-slate-100">
-                      {firstComplaint(serving) || "No complaint recorded"}
-                    </div>
+
+                    {serving.chiefComplaints.length > 0 ? (
+                      <div className="space-y-4">
+                        {serving.chiefComplaints.map((complaint, index) => (
+                          <div
+                            key={`${complaint.complaint}-${index}`}
+                            className={`rounded-xl border p-4 ${isEmergency ? 'border-red-800/70 bg-slate-900/70' : 'border-amber-900/60 bg-slate-900/70'}`}
+                          >
+                            <p className={`text-xs font-bold uppercase tracking-wider ${isEmergency ? 'text-red-300' : 'text-slate-400'}`}>
+                              Chief Complaint
+                            </p>
+                            <p className={`mt-1 whitespace-pre-wrap break-words text-2xl font-black leading-snug sm:text-3xl ${isEmergency ? 'text-red-100' : 'text-white'}`}>
+                              {complaint.complaint || 'Not specified'}
+                            </p>
+
+                            <dl className="mt-4 grid grid-cols-1 gap-3 sm:grid-cols-3">
+                              <DetailTile label="Duration" value={complaint.duration || '—'} emergency={isEmergency} />
+                              <DetailTile
+                                label="Severity"
+                                value={complaint.severity !== '' && complaint.severity != null ? complaint.severity : '—'}
+                                emergency={isEmergency}
+                              />
+                              <DetailTile label="Location" value={complaint.location || '—'} emergency={isEmergency} />
+                            </dl>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-lg font-medium text-slate-400">No complaint recorded.</p>
+                    )}
                   </section>
 
-                  <section className="min-w-0 rounded-xl border border-rose-400/40 border-l-4 border-l-rose-400 bg-slate-950/70 p-3 sm:p-4">
-                    <div className="mb-2 flex items-center gap-2">
-                      <span className="h-2 w-2 rounded-full bg-rose-400" />
-                      <h3 className="text-xs font-black uppercase tracking-[0.14em] text-rose-200">Vital Signs</h3>
+                  <section className={`min-w-0 rounded-xl border border-l-4 p-4 sm:p-5 ${
+                    isEmergency
+                      ? 'border-red-500/60 border-l-red-500 bg-red-950/30'
+                      : 'border-rose-400/40 border-l-rose-400 bg-slate-950/70'
+                  }`}>
+                    <div className="mb-3 flex items-center gap-2">
+                      <span className={`h-3 w-3 rounded-full ${isEmergency ? 'animate-pulse bg-red-500' : 'bg-rose-400'}`} />
+                      <h3 className={`text-sm font-black uppercase tracking-[0.14em] ${isEmergency ? 'text-red-200' : 'text-rose-200'}`}>
+                        Vital Signs
+                      </h3>
                     </div>
                     {serving.vitals ? (
-                      <VitalsGrid vitals={serving.vitals} />
+                      <VitalsGrid vitals={serving.vitals} large twoCol emergency={isEmergency} />
                     ) : (
-                      <p className="text-sm text-slate-500">No vital signs recorded.</p>
+                      <p className="text-lg text-slate-500">No vital signs recorded.</p>
                     )}
                   </section>
-                </div>
-
-                {/* Additional clinical assessment */}
-                <div className="grid grid-cols-1 gap-3">
-                  <div className="rounded-xl border border-violet-400/30 border-l-4 border-l-violet-400 bg-slate-950/60 p-3 sm:p-4">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                      Additional Assessment · NEWS2
-                    </p>
-
-                    {serving.news2 == null ? (
-                      <p className="mt-2 text-sm text-slate-400">
-                        No NEWS2 assessment available.
-                      </p>
-                    ) : typeof serving.news2 === "string" ? (
-                      <p className="mt-2 text-sm font-medium text-slate-200">
-                        {serving.news2}
-                      </p>
-                    ) : (
-                      <>
-                        <div className="mt-2 flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm text-slate-400">Total score</p>
-                            <p className="text-2xl font-black text-white">
-                              {serving.news2.total}
-                            </p>
-                          </div>
-
-                          <span
-                            className={`rounded-full px-3 py-1.5 text-xs font-bold ${serving.news2.route === "EMERGENCY"
-                              ? "bg-red-500/15 text-red-300"
-                              : serving.news2.route === "URGENT"
-                                ? "bg-orange-500/15 text-orange-300"
-                                : serving.news2.route === "PRIORITY"
-                                  ? "bg-amber-500/15 text-amber-300"
-                                  : "bg-emerald-500/15 text-emerald-300"
-                              }`}
-                          >
-                            {serving.news2.route}
-                          </span>
-                        </div>
-
-                        <p className="mt-2 text-sm text-slate-300">
-                          Assessment status:{" "}
-                          <span className={serving.news2.complete ? "text-emerald-300" : "text-amber-300"}>
-                            {serving.news2.complete ? "Complete" : "Incomplete"}
-                          </span>
-                        </p>
-
-                        {!serving.news2.complete && (
-                          <div className="mt-3 rounded-lg border border-amber-700/50 bg-amber-950/30 p-3">
-                            <p className="text-xs font-semibold text-amber-300">
-                              Missing parameters
-                            </p>
-                            <p className="mt-1 text-sm text-slate-300">
-                              {serving.news2.missingParameters.join(", ") || "Not specified"}
-                            </p>
-                          </div>
-                        )}
-
-                        {serving.news2.criticalParameters.length > 0 && (
-                          <div className="mt-3 rounded-lg border border-red-700/50 bg-red-950/30 p-3">
-                            <p className="text-xs font-semibold text-red-300">
-                              Critical parameters
-                            </p>
-                            <p className="mt-1 text-sm text-slate-200">
-                              {serving.news2.criticalParameters.join(", ")}
-                            </p>
-                          </div>
-                        )}
-                      </>
-                    )}
-                  </div>
-
-
-
                 </div>
 
                 {/* Patient queue actions */}
@@ -1292,7 +1334,10 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
 
                     <button
                       type="button"
-                      onClick={() => setConfirmFinish(serving)}
+                      onClick={() => {
+                        setFinishError("");
+                        setConfirmFinish(serving);
+                      }}
                       className="inline-flex items-center justify-center gap-2 rounded-xl bg-emerald-600 px-5 py-3 font-semibold text-white shadow-lg transition hover:bg-emerald-500 focus:outline-none focus:ring-2 focus:ring-emerald-400 focus:ring-offset-2 focus:ring-offset-slate-900"
                     >
                       Finish Visit
@@ -1324,9 +1369,14 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
             <div className="w-full max-w-md rounded-2xl border border-slate-700 bg-slate-900 p-6 shadow-2xl">
               <h2 id="finish-confirm-title" className="text-lg font-black text-white">Finish this queue visit?</h2>
               <p className="mt-2 text-sm text-slate-300">Ticket <strong>{displayNumber(confirmFinish.ticketCode)}</strong> will leave the active queue and remain available in Recently Completed and Patient History.</p>
+              {finishError && (
+                <p role="alert" className="mt-3 rounded-lg border border-red-700 bg-red-950/50 px-3 py-2 text-sm text-red-200">
+                  Could not finish this visit: {finishError}
+                </p>
+              )}
               <div className="mt-5 flex justify-end gap-3">
-                <button type="button" onClick={() => setConfirmFinish(null)} className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800">Keep active</button>
-                <button type="button" onClick={() => handleFinish(confirmFinish)} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500">Confirm finish</button>
+                <button type="button" disabled={finishingVisit} onClick={() => setConfirmFinish(null)} className="rounded-xl border border-slate-600 px-4 py-2 text-sm font-semibold text-slate-200 hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-50">Keep active</button>
+                <button type="button" disabled={finishingVisit} onClick={() => void handleFinish(confirmFinish)} className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-500 disabled:cursor-wait disabled:opacity-60">{finishingVisit ? "Saving…" : "Confirm finish"}</button>
               </div>
             </div>
           </div>
@@ -1522,7 +1572,7 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
                     }}
                     onCall={handleCallPatient}
                    
-                    isServing={!!serving}
+                    isServing={!!serving || !!callingId}
                     isNew={newlyAddedPatientIds.has(patient.id)}
                   />
                 ))}
@@ -1583,7 +1633,7 @@ function ClinicQueue({ clinic, allPatients, onUpdate, newlyAddedPatientIds }: {
             }}
              onCancel={(p) => setConfirmCancel(p)}
             onCall={() => handleCallPatient(popupPatient)}
-            isServing={!!serving}
+            isServing={!!serving || !!callingId}
             onFinish={() => setConfirmFinish(popupPatient)}
             onForward={(destination, note) => {
               setTransferNotice(
@@ -1741,7 +1791,7 @@ function CompletedPatientDetailsPopup({
           </section>
           <section className="overflow-hidden rounded-2xl border border-cyan-800/70 bg-slate-900/70">
             <div className="flex items-center gap-2 border-b border-cyan-900/70 bg-cyan-950/30 px-4 py-3"><span className="h-5 w-1 rounded-full bg-cyan-400" /><h3 className="font-black text-white">Vital Signs</h3><span className="ml-auto text-xs font-semibold text-cyan-300">Clinical assessment</span></div>
-            <div className="p-3 sm:p-4"><VitalsGrid vitals={patient.vitals} large />{patient.news2 && <div className="mt-3 rounded-xl border border-cyan-800/80 bg-cyan-950/30 p-3 sm:p-4"><p className="font-bold text-cyan-300">NEWS2: {patient.news2.total} · {patient.news2.route}</p><p className="mt-2 text-sm text-slate-300">{patient.news2.complete ? 'Assessment complete' : 'Partial assessment'}. Respiratory rate: {patient.news2.components.respiratoryRate ?? '—'}. Oxygen saturation: {patient.news2.components.oxygenSaturation ?? '—'}. Systolic BP: {patient.news2.components.systolicBloodPressure ?? '—'}. Pulse: {patient.news2.components.pulseRate ?? '—'}. Temperature: {patient.news2.components.temperature ?? '—'}.</p>{patient.news2.criticalParameters.length > 0 && <p className="mt-2 font-bold text-red-300">Critical parameters: {patient.news2.criticalParameters.join(', ')}</p>}</div>}</div>
+            <div className="p-3 sm:p-4"><VitalsGrid vitals={patient.vitals} large /></div>
           </section>
         </div>
         <footer className="flex flex-wrap justify-between gap-3 border-t border-cyan-900/70 bg-slate-950 p-4">
@@ -2095,49 +2145,58 @@ export default function ClinicDashboard() {
     }
   }
 
-
+  // Auth listener (single copy; the duplicate was removed).
   useEffect(() => {
     let mounted = true;
-    const unsubscribe = onAuthStateChanged(
-      auth,
-      user => {
-        if (!user) {
-          if (mounted) {
-            setActiveClinic(null);
-            setLoadingPatients(false);
-            setAuthReady(true);
-          }
-          return;
-        }
+    let unsubscribe: (() => void) | undefined;
 
-        void getStaffClinic(user.uid)
-          .then(code => {
-            if (!mounted) return;
-            setActiveClinic(CLINICS.find(clinic => clinic.code === code) ?? null);
-            setLoadingPatients(true);
-            setPatientError("");
-            setLoginError("");
-            setAuthReady(true);
-          })
-          .catch(async error => {
-            if (!mounted) return;
-            setActiveClinic(null);
-            setLoadingPatients(false);
-            setLoginError(error instanceof Error ? error.message : "Could not verify staff access.");
-            setAuthReady(true);
-            await signOut(auth);
-          });
-      },
-      error => {
+    // Always start at the staff login when the dashboard is opened
+    signOut(auth)
+      .catch(() => {})
+      .finally(() => {
         if (!mounted) return;
-        setLoadingPatients(false);
-        setLoginError(error.message);
-        setAuthReady(true);
-      },
-    );
+        unsubscribe = onAuthStateChanged(
+          auth,
+          user => {
+            if (!user) {
+              if (mounted) {
+                setActiveClinic(null);
+                setLoadingPatients(false);
+                setAuthReady(true);
+              }
+              return;
+            }
+
+            void getStaffClinic(user.uid)
+              .then(code => {
+                if (!mounted) return;
+                setActiveClinic(CLINICS.find(clinic => clinic.code === code) ?? null);
+                setLoadingPatients(true);
+                setPatientError("");
+                setLoginError("");
+                setAuthReady(true);
+              })
+              .catch(async error => {
+                if (!mounted) return;
+                setActiveClinic(null);
+                setLoadingPatients(false);
+                setLoginError(error instanceof Error ? error.message : "Could not verify staff access.");
+                setAuthReady(true);
+                await signOut(auth);
+              });
+          },
+          error => {
+            if (!mounted) return;
+            setLoadingPatients(false);
+            setLoginError(error.message);
+            setAuthReady(true);
+          },
+        );
+      });
+
     return () => {
       mounted = false;
-      unsubscribe();
+      unsubscribe?.();
     };
   }, []);
 
@@ -2292,14 +2351,17 @@ export default function ClinicDashboard() {
     setNotificationLog((previous) => previous.map((item) => ({ ...item, read: true })));
   }
 
-  async function commit(next: Patient[]) {
+  async function commit(next: Patient[]): Promise<string | null> {
     const promoted = promoteAll(next);
     try {
       await persistPatientStatuses(patients, promoted);
       if (activeClinic) setPatientState({ clinic: activeClinic.code, patients: promoted });
       setPatientError("");
+      return null;
     } catch (error) {
-      setPatientError(error instanceof Error ? error.message : "Could not update the queue.");
+      const message = error instanceof Error ? error.message : "Could not update the queue.";
+      setPatientError(message);
+      return message;
     }
   }
 
