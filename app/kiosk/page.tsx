@@ -60,6 +60,7 @@ type VitalPayload = Partial<VitalData> & {
 };
 
 type VitalAssessment = Pick<VitalPayload, "queue" | "color" | "priorityOverride">;
+type VitalAssessmentMap = Partial<Record<VitalStage, VitalAssessment>>;
 type QueueCategory = "EMERGENCY" | "URGENT" | "PRIORITY" | "REGULAR";
 const CATEGORY_RANK: Record<QueueCategory, number> = { REGULAR: 0, PRIORITY: 1, URGENT: 2, EMERGENCY: 3 };
 
