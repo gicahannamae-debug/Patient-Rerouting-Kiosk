@@ -101,34 +101,114 @@ const breast = (id: string, systemValue: string, surgery: boolean): Complaint =>
 });
 
 /** Groin / scrotal complaints share questions and rules. */
-const groin = (id: string, systemValue: string, label: string, sublabel: string, loc: Pairs): Complaint => ({
-  id, systemValue, label, sublabel, pain: PAIN_STD,
-  questions: [
-    single("loc", "Where is it?", loc),
-    single("dur", "How long has the bulge, swelling, or pain been present?", [
-      ["sudden", "Started suddenly (within hours)"], ["1to4w", "1 to 4 weeks"],
-      ["gt1m", "More than 1 month"], ["childhood", "Since childhood"]]),
-    single("pattern", "When is it worst?", [
-      ["constant", "Constant"], ["standing", "Only when standing, coughing, or lifting"],
-      ["reducible", "Comes and goes (goes back in on its own)"]]),
-    multi("flags", "Any of these?", [
-      ["stuck", "Bulge cannot be pushed back in"], ["vomitFever", "Vomiting or fever"],
-      ["racing", "Racing heartbeat"], ["severeTesticular", "Severe sudden testicle pain"],
-      ["painful", "The bulge is painful"], ["growing", "Discomfort is growing"],
-      ["heavy", "Painless heaviness"]]),
-  ],
-  rules: [
-    U("Bulge stuck + vomiting/fever + racing heartbeat",
-      all(is("pattern", "constant"), is("flags", "stuck"), is("flags", "vomitFever"), is("flags", "racing"))),
-    U("Sudden severe testicular pain (torsion protocol)", all(is("dur", "sudden"), is("flags", "severeTesticular"))),
-    U("Painful bulge at the thigh crease (femoral)", all(is("loc", "femoral"), is("flags", "painful"))),
-    U("Groin bulge with constant pain, hours old",
-      all(is("loc", "direct", "indirect", "femoral"), is("dur", "sudden"), is("pattern", "constant"))),
-    P("Bulge for 1 to 4 weeks", all(is("loc", "direct", "indirect", "femoral"), is("dur", "1to4w"))),
-    P("Over 1 month with growing discomfort", all(is("dur", "gt1m"), is("flags", "growing"))),
-    P("Ongoing testicular pain", is("loc", "testPain")),
-  ],
-});
+
+/** Groin / scrotal complaints share questions and applicable rules. */
+const groin = (
+  id: string,
+  systemValue: string,
+  label: string,
+  sublabel: string,
+  loc: Pairs
+): Complaint => {
+  const locationIds = loc.map(([optionId]) => optionId);
+
+  const herniaLocations = ["direct", "indirect", "femoral"]
+    .filter(optionId => locationIds.includes(optionId));
+
+  const hasFemoral = locationIds.includes("femoral");
+  const hasTestPain = locationIds.includes("testPain");
+
+  return {
+    id, systemValue, label, sublabel, pain: PAIN_STD,
+
+    questions: [
+      single("loc", "Where is it?", loc),
+
+      single("dur", "How long has the bulge, swelling, or pain been present?", [
+        ["sudden", "Started suddenly (within hours)"],
+        ["1to4w", "1 to 4 weeks"],
+        ["gt1m", "More than 1 month"],
+        ["childhood", "Since childhood"]
+      ]),
+
+      single("pattern", "When is it worst?", [
+        ["constant", "Constant"],
+        ["standing", "Only when standing, coughing, or lifting"],
+        ["reducible", "Comes and goes (goes back in on its own)"]
+      ]),
+
+      multi("flags", "Any of these?", [
+        ["stuck", "Bulge cannot be pushed back in"],
+        ["vomitFever", "Vomiting or fever"],
+        ["racing", "Racing heartbeat"],
+        ["severeTesticular", "Severe sudden testicle pain"],
+        ["painful", "The bulge is painful"],
+        ["growing", "Discomfort is growing"],
+        ["heavy", "Painless heaviness"]
+      ]),
+    ],
+
+    rules: [
+      // Shared rules
+      U(
+        "Bulge stuck + vomiting/fever + racing heartbeat",
+        all(
+          is("pattern", "constant"),
+          is("flags", "stuck"),
+          is("flags", "vomitFever"),
+          is("flags", "racing")
+        )
+      ),
+
+      U(
+        "Sudden severe testicular pain (torsion protocol)",
+        all(is("dur", "sudden"), is("flags", "severeTesticular"))
+      ),
+
+      // Hernia-specific rules
+      ...(hasFemoral ? [
+        U(
+          "Painful bulge at the thigh crease (femoral)",
+          all(is("loc", "femoral"), is("flags", "painful"))
+        )
+      ] : []),
+
+      ...(herniaLocations.length > 0 ? [
+        U(
+          "Groin bulge with constant pain, hours old",
+          all(
+            is("loc", ...herniaLocations),
+            is("dur", "sudden"),
+            is("pattern", "constant")
+          )
+        ),
+
+        P(
+          "Bulge for 1 to 4 weeks",
+          all(
+            is("loc", ...herniaLocations),
+            is("dur", "1to4w")
+          )
+        )
+      ] : []),
+
+      // Shared duration rule
+      P(
+        "Over 1 month with growing discomfort",
+        all(is("dur", "gt1m"), is("flags", "growing"))
+      ),
+
+      // Scrotal-specific rule
+      ...(hasTestPain ? [
+        P(
+          "Ongoing testicular pain",
+          is("loc", "testPain")
+        )
+      ] : [])
+    ],
+  };
+};
+
 
 // ─────────────────────────────────────────────────────────────────────────────
 export const CATEGORIES: Category[] = [
