@@ -11,6 +11,7 @@ export interface PatientInfoValues {
   firstName: string;
   middleName: string;
   pwdStatus: string;
+  pregnant: boolean;
   birthdate: string;
   age: string;
   ageDisplay: string;
@@ -49,6 +50,7 @@ const defaultValues: PatientInfoValues = {
   firstName: "",
   middleName: "",
   pwdStatus: "Not PWD",
+  pregnant: false,
   birthdate: "",
   age: "",
   ageDisplay: "",
@@ -148,6 +150,7 @@ export default function PatientInformation({
       address: values.address.trim(),
       birthplace: values.birthplace.trim(),
       religion: values.religion.trim(),
+      pregnant: values.gender === "FEMALE" && values.pregnant,
       age,
     };
 
@@ -328,7 +331,15 @@ export default function PatientInformation({
                   name="gender"
                   required
                   value={values.gender}
-                  onChange={(e) => updateField("gender", e.target.value.toUpperCase())}
+                  onChange={(e) => {
+                    const gender = e.target.value.toUpperCase();
+                    setValues(previous => ({
+                      ...previous,
+                      gender,
+                      pregnant: gender === "FEMALE" && previous.pregnant,
+                    }));
+                    setError("");
+                  }}
                   className={inputClass}
                 >
                   <option value="">{language === "en" ? "SELECT SEX" : "PILIA ANG SEKSO"}</option>
@@ -336,6 +347,38 @@ export default function PatientInformation({
                   <option value="FEMALE">{language === "en" ? "FEMALE" : "BABAYE"}</option>
                 </select>
               </div>
+
+              {values.gender === "FEMALE" && (
+                <div>
+                  <label className={labelClass} htmlFor="pregnant">
+                    {language === "en" ? "Currently Pregnant?" : "Nagmabdos karon?"}
+                  </label>
+                  <div className="mt-2 flex flex-wrap gap-4">
+                    <label className="flex items-center gap-2">
+                      <input
+                        id="pregnant-no"
+                        type="radio"
+                        name="pregnant"
+                        checked={!values.pregnant}
+                        onChange={() => updateField("pregnant", false)}
+                        className="h-4 w-4 accent-cyan-600"
+                      />
+                      <span>{language === "en" ? "NO" : "DILI"}</span>
+                    </label>
+                    <label className="flex items-center gap-2">
+                      <input
+                        id="pregnant-yes"
+                        type="radio"
+                        name="pregnant"
+                        checked={values.pregnant}
+                        onChange={() => updateField("pregnant", true)}
+                        className="h-4 w-4 accent-cyan-600"
+                      />
+                      <span>{language === "en" ? "YES" : "OO"}</span>
+                    </label>
+                  </div>
+                </div>
+              )}
 
               <div>
                 <label className={labelClass} htmlFor="civilStatus">

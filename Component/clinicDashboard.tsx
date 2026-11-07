@@ -88,8 +88,8 @@ const CAT_ORDER: Category[] = ['EMERGENCY', 'URGENT', 'PRIORITY', 'REGULAR'];
 
 const CAT_STYLE: Record<Category, { bg: string; text: string; badge: string; label: string }> = {
   EMERGENCY: { bg: 'bg-red-800', text: 'text-white', badge: 'bg-red-800 text-white', label: 'EMERGENCY (E)' },
-  URGENT: { bg: 'bg-red-600', text: 'text-white', badge: 'bg-red-600 text-white', label: 'URGENT (U)' },
-  PRIORITY: { bg: 'bg-orange-400', text: 'text-white', badge: 'bg-orange-400 text-white', label: 'PRIORITY (P)' },
+  URGENT: { bg: 'bg-orange-500', text: 'text-white', badge: 'bg-orange-500 text-white', label: 'URGENT (U)' },
+  PRIORITY: { bg: 'bg-yellow-400', text: 'text-slate-950', badge: 'bg-yellow-400 text-slate-950', label: 'PRIORITY (P)' },
   REGULAR: { bg: 'bg-green-500', text: 'text-white', badge: 'bg-green-500 text-white', label: 'REGULAR (R)' },
 };
 
@@ -171,12 +171,11 @@ function VitalsGrid({
   const items = [
     { label: 'BP', value: vitals?.bp ?? '—', unit: 'mmHg' },
     { label: 'HR', value: vitals?.hr != null ? String(vitals.hr) : '—', unit: 'bpm' },
-    { label: 'RR', value: vitals?.rr != null ? String(vitals.rr) : '—', unit: '/min' },
     { label: 'Temp', value: vitals?.temp != null ? vitals.temp.toFixed(1) : '—', unit: '°C' },
     { label: 'SpO₂', value: vitals?.spo2 != null ? String(vitals.spo2) : '—', unit: '%' },
   ];
 
-  const cols = stacked ? 'grid-cols-1' : twoCol ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-5';
+  const cols = stacked ? 'grid-cols-1' : twoCol ? 'grid-cols-2' : 'grid-cols-2 sm:grid-cols-4';
 
   return (
     <div className={`grid ${cols} ${large ? 'gap-3' : 'gap-2'}`}>

@@ -3,21 +3,52 @@ import React, { useMemo, useState } from "react";
 import KioskHeader from "@/Component/kioskHeader";
 import type { KioskLanguage } from "@/lib/kioskLanguage";
 
-const BP_CATEGORIES = [
-  { label: "🔴 HYPERTENSIVE CRISIS", range: "SBP > 180 or DBP > 120", predicate: (s: number, d: number) => s > 180 || d > 120, color: "bg-red-700" },
-  { label: "🔴 SEVERE HYPOTENSION", range: "SBP < 80", predicate: (s: number) => s < 80, color: "bg-red-600" },
-  { label: "Hypotension", range: "SBP < 90 or DBP < 60", predicate: (s: number, d: number) => s < 90 || d < 60, color: "bg-orange-400" },
-  { label: "Stage 2 Hypertension", range: "SBP ≥ 140 or DBP ≥ 90", predicate: (s: number, d: number) => s >= 140 || d >= 90, color: "bg-red-500" },
-  { label: "Elevated / High", range: "SBP 121–139 or DBP 81–89", predicate: (s: number, d: number) => (s >= 121 && s <= 139) || (d >= 81 && d <= 89), color: "bg-yellow-400" },
-  { label: "Normal", range: "SBP 90–120 and DBP 60–80", predicate: (s: number, d: number) => s >= 90 && s <= 120 && d >= 60 && d <= 80, color: "bg-green-400" },
+export type BpQueue = "ER" | "URGENT" | "NORMAL";
+export type BpQueueColor = "red" | "orange" | "green" | "yellow";
+type Severity = "CRITICAL" | "BORDERLINE" | "NORMAL";
+
+type BPCategory = {
+  label: string;
+  range: string;
+  severity: Severity;
+  predicate: (s: number, d: number) => boolean;
+};
+
+// Clinic-side only. These labels are never shown to the patient.
+// Ordered by priority: the first matching category wins.
+const BP_CATEGORIES: BPCategory[] = [
+  { label: "Critically High", range: "SBP > 180 or DBP > 120", severity: "CRITICAL", predicate: (s, d) => s > 180 || d > 120 },
+  { label: "Critically Low", range: "SBP < 90 or DBP < 60", severity: "CRITICAL", predicate: (s, d) => s < 90 || d < 60 },
+  { label: "Normal", range: "SBP 100–120 and DBP 65–80", severity: "NORMAL", predicate: (s, d) => s >= 100 && s <= 120 && d >= 65 && d <= 80 },
+  { label: "Borderline Low", range: "SBP 90–99 or DBP 60–64", severity: "BORDERLINE", predicate: (s, d) => (s >= 90 && s <= 99) || (d >= 60 && d <= 64) },
+  { label: "Borderline High", range: "SBP 121–139 or DBP 81–89", severity: "BORDERLINE", predicate: (s, d) => (s >= 121 && s <= 139) || (d >= 81 && d <= 89) },
+  // Fallback: the table has no row for SBP 140–180 / DBP 90–120.
+  { label: "High", range: "SBP 140–180 or DBP 90–120", severity: "BORDERLINE", predicate: () => true },
 ];
+
+export interface BloodPressureResult {
+  bpSys: string;
+  bpDia: string;
+  bpCategory: string;
+  /** ER = critical, URGENT = borderline (or priority patient), NORMAL = normal. */
+  queue: BpQueue;
+  /** red = critical, orange = borderline, green = normal, yellow = normal but priority patient. */
+  color: BpQueueColor;
+  /** True when a Normal result was upgraded because of patient status. */
+  priorityOverride: boolean;
+}
 
 type BpField = "systolic" | "diastolic";
 
 interface VsBloodpressureProps {
   language: KioskLanguage;
+  /** True for PWD, senior, pregnant, or any other priority status. */
+  isPriorityPatient?: boolean;
+  /** Previously entered values (from the parent) so they reappear when the patient comes back. */
+  initialSystolic?: string;
+  initialDiastolic?: string;
   onLogout?: () => void;
-  onProceed?: (values: { bpSys: string; bpDia: string }) => void;
+  onProceed?: (values: BloodPressureResult) => void;
   onNavigateStep?: (step: number) => void;
   onNavigateVitalPart?: (part: number) => void;
   /** Which vital-sign part this page is (1 = BP). */
@@ -26,15 +57,21 @@ interface VsBloodpressureProps {
 
 export default function VsBloodpressure({
   language,
+  isPriorityPatient = false,
+  initialSystolic = "",
+  initialDiastolic = "",
   onLogout,
   onProceed,
   onNavigateStep,
   onNavigateVitalPart,
   part = 1,
 }: VsBloodpressureProps) {
-  const [systolic, setSystolic] = useState("");
-  const [diastolic, setDiastolic] = useState("");
-  const [activeField, setActiveField] = useState<BpField | null>(null);
+  const [systolic, setSystolic] = useState(initialSystolic);
+  const [diastolic, setDiastolic] = useState(initialDiastolic);
+  // Start on systolic for a fresh page; if values are prefilled, wait for a tap
+  const [activeField, setActiveField] = useState<BpField | null>(
+    initialSystolic || initialDiastolic ? null : "systolic"
+  );
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const [showValidationPopup, setShowValidationPopup] = useState(false);
   const isCebuano = language === "ceb";
@@ -44,10 +81,42 @@ export default function VsBloodpressure({
   const isValidSystolic = !Number.isNaN(systolicValue) && systolicValue >= 60 && systolicValue <= 300;
   const isValidDiastolic = !Number.isNaN(diastolicValue) && diastolicValue >= 40 && diastolicValue <= 200;
 
-  const bpCategory = useMemo(() => {
+  // Clinic-side classification and queue routing (not displayed to the patient)
+  const routing = useMemo<BloodPressureResult | null>(() => {
     if (!isValidSystolic || !isValidDiastolic) return null;
-    return BP_CATEGORIES.find((item) => item.predicate(systolicValue, diastolicValue)) ?? null;
-  }, [systolicValue, diastolicValue, isValidSystolic, isValidDiastolic]);
+
+    const cat = BP_CATEGORIES.find((c) => c.predicate(systolicValue, diastolicValue));
+    if (!cat) return null;
+
+    let queue: BpQueue;
+    let color: BpQueueColor;
+    let priorityOverride = false;
+
+    if (cat.severity === "CRITICAL") {
+      queue = "ER";
+      color = "red";
+    } else if (cat.severity === "BORDERLINE") {
+      queue = "URGENT";
+      color = "orange";
+    } else if (isPriorityPatient) {
+      // Normal reading, but PWD / senior / pregnant -> yellow, always urgent
+      queue = "URGENT";
+      color = "yellow";
+      priorityOverride = true;
+    } else {
+      queue = "NORMAL";
+      color = "green";
+    }
+
+    return {
+      bpSys: systolicValue.toFixed(0),
+      bpDia: diastolicValue.toFixed(0),
+      bpCategory: cat.label,
+      queue,
+      color,
+      priorityOverride,
+    };
+  }, [systolicValue, diastolicValue, isValidSystolic, isValidDiastolic, isPriorityPatient]);
 
   // ── Keypad helpers ──
   const selectField = (field: BpField) => {
@@ -77,6 +146,8 @@ export default function VsBloodpressure({
     if (activeField === "systolic") setSystolic((previous) => previous.slice(0, -1));
     else if (activeField === "diastolic") setDiastolic((previous) => previous.slice(0, -1));
   };
+
+  const keypadDisabled = activeField === null;
 
   return (
     <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
@@ -164,6 +235,11 @@ export default function VsBloodpressure({
                   aria-label="Systolic blood pressure in mmHg"
                   className={`w-full text-[1rem] text-cyan-950 border ${activeField === "systolic" ? "border-orange-400 ring-2 ring-orange-300" : "border-stone-300"} bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] cursor-pointer focus:outline-none`}
                 />
+                {systolic !== "" && !isValidSystolic && (
+                  <p className="text-[0.95rem] text-yellow-300">
+                    {isCebuano ? "Isulod ang hustong systolic tali sa 60 ug 300 mmHg." : "Please enter a valid systolic between 60 and 300 mmHg."}
+                  </p>
+                )}
               </section>
 
               <section className="flex flex-col gap-[0.25rem]">
@@ -180,98 +256,66 @@ export default function VsBloodpressure({
                   aria-label="Diastolic blood pressure in mmHg"
                   className={`w-full text-[1rem] text-cyan-950 border ${activeField === "diastolic" ? "border-orange-400 ring-2 ring-orange-300" : "border-stone-300"} bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] cursor-pointer focus:outline-none`}
                 />
+                {diastolic !== "" && !isValidDiastolic && (
+                  <p className="text-[0.95rem] text-yellow-300">
+                    {isCebuano ? "Isulod ang hustong diastolic tali sa 40 ug 200 mmHg." : "Please enter a valid diastolic between 40 and 200 mmHg."}
+                  </p>
+                )}
               </section>
 
-              {/* NUMPAD UI */}
-              {activeField && (
-                <section className="rounded-xl border border-cyan-600 bg-cyan-900 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <h3 className="text-lg font-bold text-white">
-                      {activeField === "systolic" ? "Systolic" : "Diastolic"} {isCebuano ? "nga Keypad" : "Keypad"}
-                    </h3>
-
+              {/* NUMPAD: always visible, no title row and no Done button */}
+              <section className="rounded-xl border border-cyan-600 bg-cyan-900 p-3">
+                <div className="grid grid-cols-3 gap-2">
+                  {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
                     <button
+                      key={digit}
                       type="button"
-                      onClick={() => setActiveField(null)}
-                      className="rounded-md bg-cyan-800 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-700"
+                      disabled={keypadDisabled}
+                      onClick={() => updateActiveValue(digit)}
+                      className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 active:bg-orange-300 disabled:opacity-40"
                     >
-                      {isCebuano ? "Human" : "Done"}
+                      {digit}
                     </button>
-                  </div>
+                  ))}
 
-                  <div className="mb-3 text-center text-sm text-cyan-200">
-                    {activeField === "systolic"
-                      ? isCebuano ? "Gitugot nga sukod: 60–300 mmHg" : "Allowed range: 60–300 mmHg"
-                      : isCebuano ? "Gitugot nga sukod: 40–200 mmHg" : "Allowed range: 40–200 mmHg"}
-                  </div>
+                  <button
+                    type="button"
+                    disabled={keypadDisabled}
+                    onClick={clearActiveValue}
+                    className="min-h-14 rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-500 disabled:opacity-40"
+                  >
+                    {isCebuano ? "Haw-asa" : "Clear"}
+                  </button>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-                      <button
-                        key={digit}
-                        type="button"
-                        onClick={() => updateActiveValue(digit)}
-                        className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 active:bg-orange-300"
-                      >
-                        {digit}
-                      </button>
-                    ))}
+                  <button
+                    type="button"
+                    disabled={keypadDisabled}
+                    onClick={() => updateActiveValue("0")}
+                    className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 disabled:opacity-40"
+                  >
+                    0
+                  </button>
 
-                    <button
-                      type="button"
-                      onClick={clearActiveValue}
-                      className="min-h-14 rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-500"
-                    >
-                      {isCebuano ? "Haw-asa" : "Clear"}
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => updateActiveValue("0")}
-                      className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200"
-                    >
-                      0
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={backspaceActiveValue}
-                      aria-label={isCebuano ? "Tangtanga ang kataposang numero" : "Delete last digit"}
-                      className="min-h-14 rounded-lg bg-cyan-700 text-xl font-bold text-white hover:bg-cyan-600"
-                    >
-                      ⌫
-                    </button>
-                  </div>
-                </section>
-              )}
-
-              {/* Patient Blood Pressure Results */}
-              <div className="flex flex-col gap-[0.75rem]">
-                <div className="text-center">
-                  <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider">{isCebuano ? "Resulta sa Presyon sa Dugo sa Pasyente" : "Patient Blood Pressure Results"}</p>
+                  <button
+                    type="button"
+                    disabled={keypadDisabled}
+                    onClick={backspaceActiveValue}
+                    aria-label={isCebuano ? "Tangtanga ang kataposang numero" : "Delete last digit"}
+                    className="min-h-14 rounded-lg bg-cyan-700 text-xl font-bold text-white hover:bg-cyan-600 disabled:opacity-40"
+                  >
+                    ⌫
+                  </button>
                 </div>
+              </section>
 
-                <div className="rounded-lg border border-cyan-600 bg-cyan-900 p-[1rem] text-white">
-                  {systolic === "" && diastolic === "" ? (
-                    <p className="text-[0.95rem] text-cyan-300">{isCebuano ? "Isulod ang systolic ug diastolic aron makita ang resulta dinhi." : "Enter systolic and diastolic values to see the result here."}</p>
-                  ) : !isValidSystolic || !isValidDiastolic ? (
-                    <p className="text-[0.95rem] text-yellow-300">{isCebuano ? "Isulod ang husto nga numero: systolic 60–300 ug diastolic 40–200 mmHg." : "Please enter valid values: systolic 60–300 and diastolic 40–200 mmHg."}</p>
-                  ) : (
-                    <>
-                      <p className="text-[0.95rem] text-cyan-300">Systolic: <span className="font-semibold text-white">{systolicValue.toFixed(0)} mmHg</span></p>
-                      <p className="text-[0.95rem]">Diastolic: <span className="font-semibold text-white">{diastolicValue.toFixed(0)} mmHg</span></p>
-                      <p className="text-[0.95rem] mt-[0.5rem]">{isCebuano ? "Resulta" : "Result"}: <span className="font-bold text-white">{bpCategory ? (isCebuano ? ({
-                        "🔴 HYPERTENSIVE CRISIS": "🔴 KRISIS SA PRESYON SA DUGO",
-                        "🔴 SEVERE HYPOTENSION": "🔴 DELIKADO KAAYO KAUBOS",
-                        Hypotension: "Ubos nga Presyon sa Dugo",
-                        "Stage 2 Hypertension": "Yugto 2 nga Taas nga Presyon",
-                        "Elevated / High": "Medyo Taas / Taas",
-                        Normal: "Normal",
-                      }[bpCategory.label] ?? bpCategory.label) : bpCategory.label) : "Unknown"}</span></p>
-                      <p className="text-[0.95rem] text-cyan-300">{isCebuano ? "Sukod" : "Range"}: {bpCategory?.range}</p>
-                    </>
-                  )}
-                </div>
+              {/* Buttons */}
+              <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">
+                <button
+                  type="submit"
+                  className="text-[1.1rem] font-semibold bg-orange-50 text-cyan-950 px-[2.5rem] py-[0.5rem] rounded-md hover:bg-orange-100 cursor-pointer"
+                >
+                  {isCebuano ? "Padayon" : "Proceed"}
+                </button>
               </div>
 
               {/* POP UP: INVALID READINGS */}
@@ -371,7 +415,7 @@ export default function VsBloodpressure({
                         type="button"
                         onClick={() => {
                           setShowConfirmPopup(false);
-                          onProceed?.({ bpSys: systolic, bpDia: diastolic });
+                          if (routing) onProceed?.(routing);
                         }}
                         className="rounded-lg bg-orange-50 px-6 py-3 text-lg font-bold text-cyan-950 hover:bg-orange-100"
                       >
@@ -381,16 +425,6 @@ export default function VsBloodpressure({
                   </div>
                 </div>
               )}
-
-              {/* Buttons */}
-              <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">
-                <button
-                  type="submit"
-                  className="text-[1.1rem] font-semibold bg-orange-50 text-cyan-950 px-[2.5rem] py-[0.5rem] rounded-md hover:bg-orange-100 cursor-pointer"
-                >
-                  {isCebuano ? "Padayon" : "Proceed"}
-                </button>
-              </div>
             </form>
           </div>
         </div>

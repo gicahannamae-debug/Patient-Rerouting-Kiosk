@@ -1,6 +1,6 @@
 'use client';
-import React, { useEffect, useRef, useState } from "react";
-import type { TicketMetadata } from "./summaryTypes";
+import React, { useCallback, useEffect, useRef, useState } from "react";
+import type { TicketMetadata } from "../lib/summaryTypes";
 import KioskHeader from "@/Component/kioskHeader";
 import type { KioskLanguage } from "@/lib/kioskLanguage";
 import type { PatientAgeGroup } from "@/lib/patientDemographics";
@@ -19,7 +19,6 @@ interface SummaryScreenProps {
   bpSys: string;
   bpDia: string;
   hr: string;
-  rr: string;
   spo2: string;
   temperature: string;
   complaints: string;
@@ -37,6 +36,8 @@ interface SummaryScreenProps {
   referralPurpose?: string;
   referralDiagnosis?: string;
   ticketMetadata?: TicketMetadata;
+  /** Emergency ticket mode: uses neutral messaging and a physical-size receipt preview. */
+  isCritical?: boolean;
   /** Called after printing finishes -> parent resets to the welcome screen */
   onFinish: () => void;
   onLogout?: () => void;
@@ -52,8 +53,8 @@ type Phase = "preview" | "printing" | "done" | "error";
 
 /** Minimum seconds to show the "printing" state after tapping Print */
 const PRINTING_SECONDS = 6;
-/** Seconds to show "Ticket printed" before returning to the welcome screen */
-const DONE_SECONDS = 2;
+/** Seconds to show "Ticket printed" (advisory stays visible) before returning to the welcome screen */
+const DONE_SECONDS = 8;
 
 // ─── Receipt image ────────────────────────────────────────────────────────────
 // 80mm paper = 576 dots wide. For 58mm paper use RECEIPT_WIDTH = 384 and
@@ -74,10 +75,10 @@ interface ReceiptData {
   bpSys: string;
   bpDia: string;
   hr: string;
-  rr: string;
   spo2: string;
   temperature: string;
   complaints: string;
+  criticalNote: string;
   clinic: string;
   destination: string;
   queueCode: string;
@@ -178,7 +179,6 @@ function buildReceiptImage(d: ReceiptData, language: KioskLanguage): string {
   centered(language === "en" ? d.serviceTitle : "KONSULTASYONG MEDIKAL", 26);
   dashed();
 
-  // Date / time
   row(language === "en" ? "DATE:" : "PETSA:", d.date);
   row(language === "en" ? "TIME:" : "ORAS:", d.time);
   dashed();
@@ -201,19 +201,23 @@ function buildReceiptImage(d: ReceiptData, language: KioskLanguage): string {
   ctx.fillStyle = "#000";
   y += blockH + 16;
 
-  centered(language === "en" ? "PROCEED TO" : "ADTO SA", 22, "normal");
-  centered(language === "en" ? d.destination : ({
-    "Surgical Services Wing": "Pakpak sa Serbisyo sa Operasyon",
-    "Internal Medicine Unit": "Yunit sa Internal Medicine",
-    "OB-GYNE Clinic": "Klinika sa OB-GYNE",
-    "Pediatrics Wing": "Pakpak sa Pediatrics",
-  }[d.destination] ?? d.destination), 30);
-  centered(language === "en" ? d.clinic : ({
-    "General Surgery": "General Surgery",
-    "Internal Medicine": "Internal Medicine",
-    "OB-GYNE": "OB-GYNE",
-    Pediatrics: "Pediatrics",
-  }[d.clinic] ?? d.clinic), 24, "normal");
+  if (d.criticalNote) {
+    centered(d.criticalNote, 24, "normal");
+  } else {
+    centered(language === "en" ? "PROCEED TO" : "ADTO SA", 22, "normal");
+    centered(language === "en" ? d.destination : ({
+      "Surgical Services Wing": "Pakpak sa Serbisyo sa Operasyon",
+      "Internal Medicine Unit": "Yunit sa Internal Medicine",
+      "OB-GYNE Clinic": "Klinika sa OB-GYNE",
+      "Pediatrics Wing": "Pakpak sa Pediatrics",
+    }[d.destination] ?? d.destination), 30);
+    centered(language === "en" ? d.clinic : ({
+      "General Surgery": "General Surgery",
+      "Internal Medicine": "Internal Medicine",
+      "OB-GYNE": "OB-GYNE",
+      Pediatrics: "Pediatrics",
+    }[d.clinic] ?? d.clinic), 24, "normal");
+  }
   dashed();
 
   // Patient
@@ -229,20 +233,20 @@ function buildReceiptImage(d: ReceiptData, language: KioskLanguage): string {
   row(language === "en" ? "ADDRESS:" : "ADDRESS:", d.address);
   dashed();
 
-  // Vitals
+  // Vitals (respiratory rate removed)
   leftText(language === "en" ? "VITAL SIGNS" : "MGA VITAL SIGN", 26);
   y += 4;
   row("BP:", `${d.bpSys}/${d.bpDia} mmHg`);
   row(language === "en" ? "HEART RATE:" : "PITIK SA KASINGKASING:", `${d.hr} bpm`);
-  row(language === "en" ? "RESPIRATORY RATE:" : "GIKUSGON SA PAGGINHAWA:", `${d.rr} breaths/min`);
   row("SpO2:", `${d.spo2} %`);
   row(language === "en" ? "TEMP:" : "TEMP:", `${d.temperature} C`);
   dashed();
 
-  // Complaint
+  // Complaint and neutral critical-route note.
   leftText(language === "en" ? "CHIEF COMPLAINT" : "PANGUNAHING REKLAMO", 26);
   y += 4;
-  leftText(d.complaints || "N/A", 26);
+  if (d.complaints) leftText(d.complaints, 26, "normal");
+  if (!d.complaints && !d.criticalNote) leftText("N/A", 26);
   dashed();
 
   // Footer
@@ -310,7 +314,6 @@ export default function SummaryScreen({
   bpSys,
   bpDia,
   hr,
-  rr,
   spo2,
   temperature,
   complaints,
@@ -320,6 +323,7 @@ export default function SummaryScreen({
   date,
   time,
   ticketMetadata,
+  isCritical = false,
   onFinish,
   onLogout,
   onNavigateStep,
@@ -328,6 +332,7 @@ export default function SummaryScreen({
 }: SummaryScreenProps) {
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>("preview");
+  const [secondsUntilRestart, setSecondsUntilRestart] = useState(30);
   const mounted = useRef(true);
 
   useEffect(() => {
@@ -336,6 +341,14 @@ export default function SummaryScreen({
       mounted.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    if (!isCritical) return;
+    const timer = window.setInterval(() => {
+      setSecondsUntilRestart(seconds => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [isCritical]);
 
   // Build the receipt image from the patient data
   const data: ReceiptData = {
@@ -350,10 +363,12 @@ export default function SummaryScreen({
     bpSys,
     bpDia,
     hr,
-    rr,
     spo2,
     temperature,
     complaints,
+    criticalNote: isCritical
+      ? language === "en" ? "Please wait for a staff member." : "Palihog hulat sa usa ka kawani."
+      : "",
     clinic,
     destination,
     queueCode,
@@ -362,11 +377,12 @@ export default function SummaryScreen({
   };
 
   useEffect(() => {
-    setReceiptUrl(buildReceiptImage(data, language));
+    const timer = window.setTimeout(() => setReceiptUrl(buildReceiptImage(data, language)), 0);
+    return () => window.clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [JSON.stringify(data), language]);
 
-  const handlePrint = async () => {
+  const handlePrint = useCallback(async () => {
     if (!receiptUrl || phase === "printing" || phase === "done") return;
     setPhase("printing");
 
@@ -379,15 +395,97 @@ export default function SummaryScreen({
 
       if (!mounted.current) return;
       setPhase("done");
-      setTimeout(() => {
-        if (mounted.current) onFinish();
-      }, DONE_SECONDS * 1000);
+      if (!isCritical) {
+        setTimeout(() => {
+          if (mounted.current) onFinish();
+        }, DONE_SECONDS * 1000);
+      }
     } catch {
       if (mounted.current) setPhase("error");
     }
-  };
+  }, [isCritical, onFinish, onPrintTicket, phase, queueCode, receiptUrl]);
 
-  const shrunk = phase !== "preview" && phase !== "error";
+  if (isCritical) {
+    return (
+      <main className="fixed inset-0 z-50 flex min-h-screen items-center justify-center overflow-y-auto bg-cyan-950 px-4 py-6 text-white sm:px-8">
+        <style>{`
+          @keyframes bica-print {
+            0% { transform: translateX(-100%); }
+            100% { transform: translateX(300%); }
+          }
+          .bica-print-bar { animation: bica-print 1.4s ease-in-out infinite; }
+          @media (prefers-reduced-motion: reduce) {
+            .bica-print-bar { animation: none; }
+          }
+        `}</style>
+        {phase === "done" ? (
+          <section role="status" aria-live="polite" className="w-full max-w-5xl py-10 text-center">
+            <h1 className="text-5xl font-extrabold leading-tight sm:text-6xl">
+              {language === "en" ? "Please stay where you are." : "Palihog pagpabilin sa imong nahimutangan."}
+            </h1>
+            <p className="mx-auto mt-8 max-w-4xl text-2xl leading-relaxed text-cyan-100 sm:text-3xl">
+              {language === "en" ? "Staff has been alerted." : "Gipahibalo na ang mga kawani."}
+            </p>
+            {secondsUntilRestart > 0 && (
+              <p className="mt-8 text-xl font-semibold text-cyan-300">
+                {language === "en" ? `New patient can start in ${secondsUntilRestart} seconds.` : `Makapagsugod ang bag-ong pasyente sulod sa ${secondsUntilRestart} segundo.`}
+              </p>
+            )}
+            <button
+              type="button"
+              onClick={onFinish}
+              disabled={secondsUntilRestart > 0}
+              className="mx-auto mt-6 min-h-14 w-full max-w-xl rounded-lg bg-cyan-700 px-6 py-4 text-xl font-bold text-white hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {language === "en" ? "Proceed / Start New Patient" : "Padayon / Sugdi ang Bag-ong Pasyente"}
+            </button>
+          </section>
+        ) : (
+          <section className="flex w-full max-w-5xl flex-col items-center gap-5" aria-label={language === "en" ? "Your ticket" : "Imong tiket"}>
+              <h1 className="text-center text-3xl font-bold sm:text-4xl">
+                {language === "en" ? "Your ticket" : "Imong tiket"}
+              </h1>
+              <div className="flex w-[80mm] max-w-full items-center justify-center overflow-hidden rounded-lg bg-white shadow-lg">
+                {receiptUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={receiptUrl} alt={`Ticket ${queueCode}`} className="h-auto max-h-[70vh] w-full object-contain" />
+                ) : (
+                  <p className="text-lg font-semibold text-slate-500">
+                    {language === "en" ? "Preparing ticket…" : "Giandam ang tiket…"}
+                  </p>
+                )}
+              </div>
+              {phase === "preview" && (
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  disabled={!receiptUrl}
+                  className="inline-flex min-h-14 w-full max-w-md items-center justify-center gap-3 rounded-lg bg-emerald-700 px-6 py-3 text-xl font-bold text-white hover:bg-emerald-600 disabled:opacity-50"
+                >
+                  <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 00-2-2v-4H9v4a2 2 0 00-2 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                  </svg>
+                  {language === "en" ? "Print ticket" : "I-imprinta ang tiket"}
+                </button>
+              )}
+              {phase === "printing" && (
+                <div role="status" className="w-full max-w-sm text-center">
+                  <p className="text-lg font-semibold text-cyan-100">{language === "en" ? "Printing ticket…" : "Gi-imprinta ang tiket…"}</p>
+                  <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-cyan-900">
+                    <div className="bica-print-bar h-full w-1/3 rounded-full bg-emerald-500" />
+                  </div>
+                </div>
+              )}
+              {phase === "error" && (
+                <button type="button" onClick={handlePrint} className="rounded-lg bg-emerald-700 px-6 py-3 font-bold text-white hover:bg-emerald-600">
+                  {language === "en" ? "Try printing again" : "Sulayi pag-imprinta pag-usab"}
+                </button>
+              )}
+          </section>
+        )}
+      </main>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-cyan-950 flex flex-col justify-between font-sans">
@@ -413,70 +511,76 @@ export default function SummaryScreen({
       {/* MAIN */}
       <div className="flex-1 flex flex-col items-center justify-center gap-6 px-6 py-8">
         <h2 className="text-4xl font-extrabold text-white text-center">
-          {phase === "preview" || phase === "error"
-            ? language === "en" ? "Your Triage Ticket" : "Imong Tiket sa Triage"
-            : language === "en" ? "Please wait" : "Palihog hulat"}
+          {language === "en" ? "Your Triage Ticket" : "Imong Tiket sa Triage"}
         </h2>
 
-        {/* Receipt preview: large, shrinks while printing */}
-        <div
-          className="flex items-center justify-center overflow-hidden rounded-lg bg-white shadow-2xl transition-all duration-700 ease-in-out"
-          style={{ height: shrunk ? "22vh" : "58vh" }}
-        >
-          {receiptUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={receiptUrl}
-              alt={`Triage ticket ${queueCode}`}
-              className="h-full w-auto object-contain"
-            />
-          ) : (
-            <div className="px-16 text-lg font-semibold text-gray-500">{language === "en" ? "Preparing ticket…" : "Giandam ang tiket…"}</div>
-          )}
-        </div>
-
-        {/* Below the receipt: print button, then status */}
-        {phase === "preview" && (
-          <button
-            type="button"
-            onClick={handlePrint}
-            disabled={!receiptUrl}
-            className="w-full max-w-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-white text-3xl font-black py-6 px-10 rounded-2xl shadow-[0_10px_30px_rgba(5,150,105,0.4)] transition-all active:scale-95 border-2 border-emerald-300 flex items-center justify-center gap-4 cursor-pointer tracking-wider"
-          >
-            <svg className="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
-            </svg>
-            <span>{language === "en" ? "PRINT TICKET" : "I-IMPRINTA ANG TIKET"}</span>
-          </button>
-        )}
-
-        {phase === "printing" && (
-          <div className="w-full max-w-xl text-center">
-            <p className="text-3xl font-bold text-cyan-100">{language === "en" ? "Printing your ticket…" : "Gi-imprinta ang imong tiket…"}</p>
-            <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-cyan-900">
-              <div className="bica-print-bar h-full w-1/3 rounded-full bg-emerald-400" />
-            </div>
-          </div>
-        )}
-
-        {phase === "done" && (
-          <p className="text-3xl font-bold text-emerald-300 text-center">
-            {language === "en" ? "Ticket printed ✓ Please take your ticket." : "Na-imprinta na ang tiket ✓ Palihog kuhaa kini."}
-          </p>
-        )}
-
-        {phase === "error" && (
-          <div className="w-full max-w-xl text-center">
-            <p className="text-2xl font-bold text-yellow-300">{language === "en" ? "Could not print. Please try again or ask staff for help." : "Dili ma-imprinta. Sulayi pag-usab o pangayo og tabang sa kawani."}</p>
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="mt-4 rounded-xl border-2 border-emerald-300 bg-emerald-600 px-8 py-3 text-xl font-bold text-white hover:bg-emerald-500 cursor-pointer"
+        <div className="flex w-full items-center justify-center">
+          <div className="flex w-full flex-col items-center gap-6">
+            <div
+              className="flex items-center justify-center overflow-hidden rounded-lg bg-white shadow-2xl"
+              style={{ height: "56vh" }}
             >
-              {language === "en" ? "Try again" : "Sulayi pag-usab"}
-            </button>
+              {receiptUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={receiptUrl}
+                  alt={`Triage ticket ${queueCode}`}
+                  className="h-full w-auto object-contain"
+                />
+              ) : (
+                <div className="px-16 text-lg font-semibold text-gray-500">
+                  {language === "en" ? "Preparing ticket…" : "Giandam ang tiket…"}
+                </div>
+              )}
+            </div>
+
+            {phase === "preview" && (
+              <button
+                type="button"
+                onClick={handlePrint}
+                disabled={!receiptUrl}
+                className="w-full max-w-xl bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 disabled:opacity-50 text-white text-3xl font-black py-6 px-10 rounded-2xl shadow-[0_10px_30px_rgba(5,150,105,0.4)] transition-all active:scale-95 border-2 border-emerald-300 flex items-center justify-center gap-4 cursor-pointer tracking-wider"
+              >
+                <svg className="w-9 h-9" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                <span>{language === "en" ? "PRINT TICKET" : "I-IMPRINTA ANG TIKET"}</span>
+              </button>
+            )}
+
+            {phase === "printing" && (
+              <div className="w-full max-w-md text-center">
+                <p className="text-3xl font-bold text-cyan-100">
+                  {language === "en" ? "Printing your ticket…" : "Gi-imprinta ang imong tiket…"}
+                </p>
+                <div className="mt-4 h-3 w-full overflow-hidden rounded-full bg-cyan-900">
+                  <div className="bica-print-bar h-full w-1/3 rounded-full bg-emerald-400" />
+                </div>
+              </div>
+            )}
+
+            {phase === "done" && (
+              <p className="text-3xl font-bold text-emerald-300 text-center">
+                {language === "en" ? "Ticket printed ✓ Please take your ticket." : "Na-imprinta na ang tiket ✓ Palihog kuhaa kini."}
+              </p>
+            )}
+
+            {phase === "error" && (
+              <div className="w-full max-w-xl text-center">
+                <p className="text-2xl font-bold text-yellow-300">
+                  {language === "en" ? "Could not print. Please try again or ask staff for help." : "Dili ma-imprinta. Sulayi pag-usab o pangayo og tabang sa kawani."}
+                </p>
+                <button
+                  type="button"
+                  onClick={handlePrint}
+                  className="mt-4 rounded-xl border-2 border-emerald-300 bg-emerald-600 px-8 py-3 text-xl font-bold text-white hover:bg-emerald-500 cursor-pointer"
+                >
+                  {language === "en" ? "Try again" : "Sulayi pag-usab"}
+                </button>
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
       {/* FOOTER */}

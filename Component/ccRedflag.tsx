@@ -53,7 +53,7 @@ interface CcRedflagProps {
   onProceed?: () => void;
   onPatientDemographics: (patient: PatientDemographics) => void;
   /** Called IMMEDIATELY when an emergency is selected (before printing) */
-  onEmergencyAlert?: (alert: EmergencyAlert) => void;
+  onEmergencyAlert?: (alert: EmergencyAlert) => Promise<string>;
   /** Send the receipt image to your thermal printer. If omitted, the image is
    *  printed through the browser (hidden iframe, 80mm page). */
   onPrintEmergencyTicket?: (payload: EmergencyPrintPayload) => void | Promise<void>;
@@ -188,7 +188,6 @@ const SAFETY_STEP_INDEX = 1;
 const TICKET_STEP_INDEX = 7;
 
 /** Seconds on the ticket screen before returning to Welcome */
-const TICKET_SCREEN_SECONDS = 20;
 const WELCOME_BACKGROUND = "/bg3.jpg";
 
 const CLINIC_CODE: Record<ClinicName, string> = {
@@ -198,7 +197,36 @@ const CLINIC_CODE: Record<ClinicName, string> = {
   "Pediatrics": "PED",
 };
 
-type ScreenStep = "welcome" | "demographics" | "safetyIntro" | "screening" | "emergency" | "erTicket";
+// Order of the context sections on the symptom list
+const CLINIC_ORDER: ClinicName[] = [PED, OBG, IM, SUR];
+
+// Secondary context labels for symptoms (NOT clinic destinations)
+const CLINIC_CONTEXT: Record<ClinicName, { en: string; ceb: string }> = {
+  "Pediatrics": {
+    en: "For children",
+    ceb: "Para sa mga bata",
+  },
+  "OB-GYN": {
+    en: "Pregnancy and women’s health",
+    ceb: "Pagmabdos ug panglawas sa kababayen-an",
+  },
+  "Internal Medicine": {
+    en: "Adult medical conditions",
+    ceb: "Mga medikal nga kondisyon sa hamtong",
+  },
+  "Surgery": {
+    en: "Injury, bleeding, and acute surgical conditions",
+    ceb: "Kadaot, pagdugo, ug dinaliang kondisyon nga pang-surgery",
+  },
+};
+
+// Used when one symptom applies to several sections (e.g. OB-GYN • IM • Surgery)
+const SHARED_CONTEXT = {
+  en: "For adults and pregnant patients",
+  ceb: "Para sa mga hamtong ug mga nagmabdos",
+};
+
+type ScreenStep = "welcome" | "demographics" | "safetyIntro" | "screening" | "erTicket";
 type PrintStatus = "idle" | "generating" | "printing" | "printed" | "error";
 
 // ─── Thermal receipt image ────────────────────────────────────────────────────
@@ -229,10 +257,9 @@ function buildReceiptImage(data: { symptom: string; ticketNumber: string; patien
   const W = RECEIPT_WIDTH;
   const PAD = 24;
   const FONT = '"Courier New", monospace';
-
   const tall = document.createElement("canvas");
   tall.width = W;
-  tall.height = 2400;
+  tall.height = 2800;
   const ctx = tall.getContext("2d")!;
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, W, tall.height);
@@ -240,16 +267,22 @@ function buildReceiptImage(data: { symptom: string; ticketNumber: string; patien
   ctx.textBaseline = "top";
 
   let y = PAD;
-
-  const centered = (str: string, size: number, weight = "bold") => {
+  const centered = (text: string, size: number, weight = "bold") => {
     ctx.textAlign = "center";
     ctx.font = `${weight} ${size}px ${FONT}`;
-    for (const line of wrapText(ctx, str, W - PAD * 2)) {
+    for (const line of wrapText(ctx, text, W - PAD * 2)) {
       ctx.fillText(line, W / 2, y);
       y += size * 1.25;
     }
   };
-
+  const leftText = (text: string, size: number, weight = "bold") => {
+    ctx.textAlign = "left";
+    ctx.font = `${weight} ${size}px ${FONT}`;
+    for (const line of wrapText(ctx, text, W - PAD * 2)) {
+      ctx.fillText(line, PAD, y);
+      y += size * 1.25;
+    }
+  };
   const dashed = () => {
     y += 8;
     ctx.setLineDash([10, 8]);
@@ -262,90 +295,74 @@ function buildReceiptImage(data: { symptom: string; ticketNumber: string; patien
     ctx.setLineDash([]);
     y += 16;
   };
-
-  // Header
-  centered(language === "en" ? "Welcome to Bica" : "Maayong pag-abot sa BICA", 48);
-  centered(language === "en" ? "Emergency Triage Slip" : "Papel sa Emergency Triage", 24, "normal");
-  centered(language === "en" ? "OPD Kiosk" : "Kiosk sa OPD", 24, "normal");
-  dashed();
-
-  // Date / time row
-  const now = new Date();
-  ctx.font = `normal 24px ${FONT}`;
-  ctx.textAlign = "left";
-  ctx.fillText(`${language === "en" ? "DATE" : "PETSA"}: ${now.toLocaleDateString()}`, PAD, y);
-  ctx.textAlign = "right";
-  ctx.fillText(
-    `${language === "en" ? "TIME" : "ORAS"}: ${now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`,
-    W - PAD,
-    y
-  );
-  y += 34;
-  dashed();
-
-  ctx.textAlign = "left";
-  ctx.font = `normal 24px ${FONT}`;
-  ctx.fillText(language === "en" ? "PATIENT DETAILS" : "IMPORMASYON SA PASYENTE", PAD, y);
-  y += 32;
-  const patientRows = [
-    [language === "en" ? "NAME" : "NGALAN", `${data.patient.firstName} ${data.patient.lastName}`],
-    [language === "en" ? "AGE" : "EDAD", `${data.patient.ageDisplay} · ${data.patient.ageGroup}`],
-    [language === "en" ? "SEX" : "SEKSO", data.patient.gender],
-    [language === "en" ? "CONTACT" : "KONTAK", data.patient.contactNumber],
-  ];
-  for (const [label, value] of patientRows) {
+  const row = (label: string, value: string) => {
+    const text = value.trim() || "N/A";
     ctx.font = `normal 24px ${FONT}`;
-    ctx.fillText(`${label}:`, PAD, y);
-    y += 30;
-    for (const line of wrapText(ctx, value, W - PAD * 2)) {
+    const labelWidth = ctx.measureText(`${label} `).width;
+    ctx.font = `bold 24px ${FONT}`;
+    const valueWidth = ctx.measureText(text).width;
+    if (labelWidth + valueWidth + 16 <= W - PAD * 2) {
+      ctx.textAlign = "left";
+      ctx.font = `normal 24px ${FONT}`;
+      ctx.fillText(label, PAD, y);
+      ctx.textAlign = "right";
       ctx.font = `bold 24px ${FONT}`;
-      ctx.fillText(line, PAD + 12, y);
-      y += 30;
+      ctx.fillText(text, W - PAD, y);
+      y += 34;
+    } else {
+      leftText(label, 24, "normal");
+      leftText(text, 26);
+      y += 6;
     }
-  }
+  };
+
+  centered("BICA", 60);
+  centered("Better Informed Care Access", 22, "normal");
+  y += 4;
+  centered(language === "en" ? "MEDICAL CONSULTATION" : "KONSULTASYONG MEDIKAL", 26);
   dashed();
 
-  // Emergency banner (white on black, since thermal paper has no red)
-  const bannerH = 64;
-  ctx.fillStyle = "#000";
-  ctx.fillRect(PAD, y, W - PAD * 2, bannerH);
-  ctx.fillStyle = "#fff";
-  ctx.textAlign = "center";
-  ctx.font = `bold 38px ${FONT}`;
-  ctx.fillText(language === "en" ? "*** EMERGENCY ***" : "*** EMERHENSIYA ***", W / 2, y + 12);
-  ctx.fillStyle = "#000";
-  y += bannerH + 16;
-
-  // Complaint
-  ctx.textAlign = "left";
-  ctx.font = `normal 24px ${FONT}`;
-  ctx.fillText(language === "en" ? "CHIEF COMPLAINT:" : "PANGUNAHING REKLAMO:", PAD, y);
-  y += 32;
-  centered(data.symptom, 30);
+  const now = new Date();
+  row(language === "en" ? "DATE:" : "PETSA:", now.toLocaleDateString());
+  row(language === "en" ? "TIME:" : "ORAS:", now.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }));
   dashed();
 
-  // Destination
-  centered(language === "en" ? "DESTINATION" : "PADULNGAN", 22, "normal");
-  centered(language === "en" ? "EMERGENCY ROOM (ER)" : "EMERGENCY ROOM (ER)", 36);
-  y += 8;
-  centered(language === "en" ? "PRIORITY QUEUE CODE" : "KODE SA PRAYORIDAD SA PILA", 22, "normal");
-
-  // Ticket number, shrunk to fit the paper width
-  let size = 84;
+  centered(language === "en" ? "QUEUE NUMBER" : "NUMERO SA PILA", 24, "normal");
+  let size = 96;
   ctx.font = `bold ${size}px ${FONT}`;
-  while (ctx.measureText(data.ticketNumber).width > W - PAD * 2 && size > 30) {
+  while (ctx.measureText(data.ticketNumber).width > W - PAD * 2 - 24 && size > 30) {
     size -= 2;
     ctx.font = `bold ${size}px ${FONT}`;
   }
-  centered(data.ticketNumber, size);
+  const blockHeight = Math.round(size * 1.35);
+  ctx.fillStyle = "#000";
+  ctx.fillRect(PAD, y, W - PAD * 2, blockHeight);
+  ctx.fillStyle = "#fff";
+  ctx.textAlign = "center";
+  ctx.font = `bold ${size}px ${FONT}`;
+  ctx.fillText(data.ticketNumber, W / 2, y + Math.round(size * 0.18));
+  ctx.fillStyle = "#000";
+  y += blockHeight + 16;
+  dashed();
+  centered(language === "en" ? "Please wait for a staff member." : "Palihog hulat sa usa ka kawani.", 24, "normal");
   dashed();
 
-  {/* FOOTER */ }
-  <footer className="w-full py-4 px-8 text-center text-cyan-300/60 text-sm border-t border-cyan-900">
-    BICA Outpatient Self-Service Kiosk
-  </footer>
+  leftText(language === "en" ? "PATIENT" : "PASYENTE", 26);
+  y += 4;
+  row(language === "en" ? "STATUS:" : "KAHIMTANG:", language === "en" ? "New Patient" : "Bag-ong Pasyente");
+  row(language === "en" ? "NAME:" : "NGALAN:", `${data.patient.firstName} ${data.patient.lastName}`);
+  row(language === "en" ? "AGE:" : "EDAD:", data.patient.ageDisplay);
+  row(language === "en" ? "AGE GROUP:" : "GRUPO SA EDAD:", data.patient.ageGroup);
+  row(language === "en" ? "SEX:" : "SEKSO:", data.patient.gender === "MALE" ? language === "en" ? "Male" : "Lalaki" : language === "en" ? "Female" : "Babaye");
+  row(language === "en" ? "CONTACT:" : "KONTAK:", data.patient.contactNumber);
+  dashed();
 
-  // Crop to content (+ bottom margin so the cutter doesn't clip the text)
+  leftText(language === "en" ? "CHIEF COMPLAINT" : "PANGUNAHING REKLAMO", 26);
+  y += 4;
+  leftText(data.symptom, 26, "normal");
+  dashed();
+  centered(language === "en" ? "Keep this ticket with you." : "Tipigi kini nga tiket.", 22, "normal");
+
   const out = document.createElement("canvas");
   out.width = W;
   out.height = Math.ceil(y + PAD + 48);
@@ -353,7 +370,6 @@ function buildReceiptImage(data: { symptom: string; ticketNumber: string; patien
   octx.fillStyle = "#fff";
   octx.fillRect(0, 0, out.width, out.height);
   octx.drawImage(tall, 0, 0);
-
   return out.toDataURL("image/jpeg", 1.0);
 }
 
@@ -417,38 +433,29 @@ export default function CcRedflag({
 
   const [receiptUrl, setReceiptUrl] = useState<string | null>(null);
   const [printStatus, setPrintStatus] = useState<PrintStatus>("idle");
+  const [alertStatus, setAlertStatus] = useState<"pending" | "sent" | "failed">("sent");
+  const [secondsUntilRestart, setSecondsUntilRestart] = useState(30);
   const printedFor = useRef<string | null>(null);
 
   const selectedCategory = CATEGORIES.find(c => c.id === categoryId) ?? null;
 
-
-  // ADDED 10-14-2026
-
-
+  // Group symptoms by their context (Pediatrics → OB-GYN → Internal Medicine → Surgery)
   const experienceGroups = selectedCategory
-  ? Object.values(
-      selectedCategory.experiences.reduce<
-        Record<
-          string,
-          { clinics: ClinicName[]; experiences: Experience[] }
-        >
-      >((groups, exp) => {
-        const key = exp.clinics.join("|");
-
-        if (!groups[key]) {
-          groups[key] = {
-            clinics: exp.clinics,
-            experiences: [],
-          };
-        }
-
-        groups[key].experiences.push(exp);
-        return groups;
-      }, {})
-    )
-  : [];
-
-  //END OF ADDED 10-14-2026
+    ? Object.values(
+        selectedCategory.experiences.reduce<
+          Record<string, { clinics: ClinicName[]; experiences: Experience[] }>
+        >((groups, exp) => {
+          const key = exp.clinics.join("|");
+          if (!groups[key]) groups[key] = { clinics: exp.clinics, experiences: [] };
+          groups[key].experiences.push(exp);
+          return groups;
+        }, {})
+      ).sort((a, b) => {
+        const rank = (g: { clinics: ClinicName[] }) =>
+          Math.min(...g.clinics.map(c => CLINIC_ORDER.indexOf(c)));
+        return rank(a) - rank(b) || a.clinics.length - b.clinics.length;
+      })
+    : [];
 
   // ── Printing ────────────────────────────────────────────────────────────────
 
@@ -466,26 +473,23 @@ export default function CcRedflag({
     }
   };
 
-  // Auto: build the receipt image, show the preview, then print once
+  // Prepare the receipt preview; printing starts only when the patient taps Print.
   useEffect(() => {
     if (screenStep !== "erTicket") return;
     if (!alertData.ticketNumber || !alertData.patient) return;
     if (printedFor.current === alertData.ticketNumber) return;
     printedFor.current = alertData.ticketNumber;
     const ticketData = { ...alertData, patient: alertData.patient };
-
-    (async () => {
+    setPrintStatus("generating");
+    const timer = window.setTimeout(() => {
       try {
-        setPrintStatus("generating");
-        const url = buildReceiptImage(ticketData, language);
-        setReceiptUrl(url);
-        // let the preview paint before the print dialog/handler takes over
-        await new Promise(r => setTimeout(r, 900));
-        await doPrint(url, ticketData);
+        setReceiptUrl(buildReceiptImage(ticketData, language));
+        setPrintStatus("idle");
       } catch {
         setPrintStatus("error");
       }
-    })();
+    }, 0);
+    return () => window.clearTimeout(timer);
   }, [screenStep, alertData, language]);
 
   // ── Handlers ────────────────────────────────────────────────────────────────
@@ -500,30 +504,37 @@ export default function CcRedflag({
     setView("experiences");
   };
 
-  const handleSelectExperience = (exp: Experience) => {
+  const handleSelectExperience = async (exp: Experience) => {
     if (!selectedCategory || !patientDetails) return;
 
-    const randomNum = Math.floor(100 + Math.random() * 900);
-    const clinicTag = exp.clinics.map(c => CLINIC_CODE[c]).join("/");
-    const ticketNumber = `ER-${clinicTag}-${randomNum}`;
-
-    setAlertData({ symptom: exp.text, ticketNumber, patient: patientDetails });
-    setScreenStep("emergency");
-
-    if (typeof window !== "undefined") {
-      sessionStorage.setItem("bica_emergency", JSON.stringify({ symptom: exp.text, ticketNumber }));
-    }
-
-    // Notify the ER dashboard right away (do NOT wait for printing)
-    onEmergencyAlert?.({
-      ticketNumber,
+    const alert: EmergencyAlert = {
+      ticketNumber: "",
       symptom: exp.text,
       patient: patientDetails,
       category: selectedCategory.name,
       clinicalCategory: selectedCategory.clinical,
       clinics: exp.clinics,
       createdAt: new Date().toISOString(),
-    });
+    };
+
+    setReceiptUrl(null);
+    setPrintStatus("idle");
+    setAlertData({ symptom: exp.text, ticketNumber: "", patient: patientDetails });
+    setAlertStatus(onEmergencyAlert ? "pending" : "failed");
+    setScreenStep("erTicket");
+
+    if (!onEmergencyAlert) return;
+    try {
+      const queuedTicketCode = await onEmergencyAlert(alert);
+      setAlertData(previous => ({ ...previous, ticketNumber: queuedTicketCode }));
+      setAlertStatus("sent");
+      if (typeof window !== "undefined") {
+        sessionStorage.setItem("bica_emergency", JSON.stringify({ symptom: exp.text, ticketNumber: queuedTicketCode }));
+      }
+    } catch (error) {
+      console.error("Red-flag staff alert failed:", error);
+      setAlertStatus("failed");
+    }
   };
 
   const handleNone = () => {
@@ -542,6 +553,7 @@ export default function CcRedflag({
     printedFor.current = null;
     setReceiptUrl(null);
     setPrintStatus("idle");
+    setAlertStatus("sent");
     setAlertData({ symptom: "", ticketNumber: "", patient: null });
     resetScreening();
     setScreenStep("welcome");
@@ -558,13 +570,15 @@ export default function CcRedflag({
     onNavigateStep?.(step);
   };
 
-  // Auto-return to Welcome after the ticket screen has been up for N seconds
+  // Offer the same 30-second restart countdown as the critical-vital summary.
   useEffect(() => {
-    if (screenStep !== "erTicket") return;
-    const timer = setTimeout(handleReset, TICKET_SCREEN_SECONDS * 1000);
-    return () => clearTimeout(timer);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [screenStep]);
+    if (screenStep !== "erTicket" || printStatus !== "printed") return;
+    setSecondsUntilRestart(30);
+    const timer = window.setInterval(() => {
+      setSecondsUntilRestart(seconds => Math.max(0, seconds - 1));
+    }, 1000);
+    return () => window.clearInterval(timer);
+  }, [screenStep, printStatus]);
 
   // ── Progress indicator state ────────────────────────────────────────────────
 
@@ -749,7 +763,7 @@ export default function CcRedflag({
 
 
 
-      {/* STEP 1: SAFETY CHECK (Emergency only) */}
+      {/* STEP 1: SAFETY CHECK (Emergency symptom screening) */}
       {screenStep === "screening" && (
         <div className="flex-1 flex flex-col items-center justify-center px-6 py-8 max-w-6xl mx-auto w-full">
 
@@ -758,15 +772,21 @@ export default function CcRedflag({
               {language === "en" ? "Safety Check" : "Pagsusi sa Kaluwasan"}
             </h2>
 
-            <p className="text-2xl text-cyan-200 mt-2">
-              {view === "categories"
-                ? language === "en"
-                  ? "Are you experiencing any of the following right now?"
-                  : "Nasinati ba nimo ang bisan hain niini karon?"
-                : language === "en"
-                  ? `${selectedCategory?.name} — which one applies to you?`
-                  : `${selectedCategory?.name} — hain niini ang imong nasinati?`}
+            <p className="text-3xl font-semibold text-cyan-200 mt-3">
+              {language === "en" ? "Check for emergency symptoms" : "Susiha ang mga sintomas sa emerhensiya"}
             </p>
+
+            <p className="text-lg text-cyan-100/80 mt-2 max-w-3xl mx-auto">
+              {language === "en"
+                ? "If any of these symptoms apply to you right now, you will be directed to the Emergency Department."
+                : "Kung adunay niini nga sintomas nga naa kanimo karon, ipadala ka sa Emergency Department."}
+            </p>
+
+            {view === "experiences" && selectedCategory && (
+              <p className="text-base font-semibold text-cyan-300 mt-3">
+                {language === "en" ? selectedCategory.name : selectedCategory.nameCeb}
+              </p>
+            )}
           </div>
 
           <div className="w-full bg-red-950/90 border-red-500/60 border-2 rounded-3xl p-8 shadow-2xl backdrop-blur-sm">
@@ -774,42 +794,28 @@ export default function CcRedflag({
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between border-b border-red-500/30 pb-4 mb-6">
 
               <div className="flex items-center gap-3 text-red-300 font-bold uppercase tracking-wider text-base">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  className="w-7 h-7 flex-shrink-0 text-red-400"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M12 9v4m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"
-                  />
-                </svg>
-
+                <span aria-hidden="true" className="text-2xl leading-none">🚨</span>
                 <span>
                   {language === "en"
-                    ? `Emergency Check: ${EMERGENCY_TITLE}`
-                    : "Pagsusi sa emerhensiya: Mga emerhensiyang naghulga sa kinabuhi (ABCs)"}
+                    ? "EMERGENCY CHECK: LIFE-THREATENING SYMPTOMS"
+                    : "PAGSUSI SA EMERHENSIYA: MGA SINTOMAS NGA NAGHULGA SA KINABUHI"}
                 </span>
               </div>
 
               <span className="text-sm text-red-100 bg-red-900 border-red-600 px-4 py-1.5 rounded-full border font-semibold self-start sm:self-auto">
                 {view === "categories"
                   ? language === "en"
-                    ? "Tap the one that applies"
-                    : "Pilia ang angay kanimo"
+                    ? "Tap the symptom type that applies"
+                    : "Pilia ang matang sa sintomas nga angay kanimo"
                   : language === "en"
-                    ? "Tap what you are experiencing"
-                    : "Pilia ang imong nasinati"}
+                    ? "Tap the symptom that best describes what you are experiencing."
+                    : "Pilia ang sintomas nga labing naghulagway sa imong nasinati."}
               </span>
             </div>
 
             <div className="min-h-[360px] flex flex-col justify-between gap-6">
 
-              {/* CATEGORY SELECTION */}
+              {/* SYMPTOM TYPE SELECTION */}
               {view === "categories" && (
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-5 justify-items-center">
                   {CATEGORIES.map(cat => (
@@ -820,53 +826,49 @@ export default function CcRedflag({
                       className="w-full max-w-md bg-red-900/70 border-red-500/50 hover:bg-red-700 border rounded-2xl p-6 text-left active:scale-[0.98] transition-all cursor-pointer group flex items-center justify-center min-h-[180px]"
                     >
                       <p className="text-red-50 group-hover:text-white text-3xl font-bold leading-snug text-center">
-                        {language === "en"
-                          ? cat.name
-                          : cat.nameCeb}
+                        {language === "en" ? cat.name : cat.nameCeb}
                       </p>
                     </button>
                   ))}
                 </div>
               )}
-              
-              {/* EXPERIENCE SELECTION */}
+
+              {/* SYMPTOM SELECTION */}
               {view === "experiences" && selectedCategory && (
                 <div className="flex flex-col gap-8">
-                  {experienceGroups.map((group, groupIndex) => (
-                    <section key={groupIndex} className="w-full">
-                      {/* CLINIC GROUP HEADING */}
-                      <div className="flex items-center gap-3 mb-4 border-b border-red-500/40 pb-3">
-                        <div className="h-8 w-1.5 rounded-full bg-yellow-400" />
+                  {experienceGroups.map((group, groupIndex) => {
+                    const isShared = group.clinics.length > 1;
+                    const context = isShared ? SHARED_CONTEXT : CLINIC_CONTEXT[group.clinics[0]];
+                    return (
+                      <section key={groupIndex} className="w-full">
+                        {/* CONTEXT LABEL (secondary — not a destination) */}
+                        <div className="mb-4 border-b border-red-500/30 pb-3">
+                          <h3 className="text-lg sm:text-xl font-bold text-red-100">
+                            {group.clinics.join(" • ")}
+                          </h3>
+                          <p className="text-sm sm:text-base text-red-200/80">
+                            {language === "en" ? context.en : context.ceb}
+                          </p>
+                        </div>
 
-                        <h3 className="text-xl sm:text-2xl font-extrabold text-yellow-300">
-                          {group.clinics.join(" • ")}
-                        </h3>
-
-                        <span className="ml-auto text-sm text-red-200">
-                          {group.experiences.length}{" "}
-                          {language === "en" ? "options" : "kapilian"}
-                        </span>
-                      </div>
-
-                      {/* SYMPTOM SELECTIONS */}
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 justify-items-center">
-                        {group.experiences.map((exp, i) => (
-                          <button
-                            key={i}
-                            type="button"
-                            onClick={() => handleSelectExperience(exp)}
-                            className="w-full max-w-xl min-h-[140px] flex items-center justify-center rounded-2xl border border-red-500/50 bg-red-900/70 p-6 text-center transition-all hover:bg-red-700 active:scale-[0.98] cursor-pointer group"
-                          >
-                            <p className="text-xl sm:text-2xl font-semibold leading-relaxed text-red-50 group-hover:text-white">
-                              {language === "en"
-                                ? exp.text
-                                : exp.textCeb}
-                            </p>
-                          </button>
-                        ))}
-                      </div>
-                    </section>
-                  ))}
+                        {/* SYMPTOM CARDS */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 justify-items-center">
+                          {group.experiences.map((exp, i) => (
+                            <button
+                              key={i}
+                              type="button"
+                              onClick={() => handleSelectExperience(exp)}
+                              className="w-full max-w-xl min-h-[140px] flex items-center justify-center rounded-2xl border border-red-500/50 bg-red-900/70 p-6 text-center transition-all hover:bg-red-700 active:scale-[0.98] cursor-pointer group"
+                            >
+                              <p className="text-xl sm:text-2xl font-semibold leading-relaxed text-red-50 group-hover:text-white">
+                                {language === "en" ? exp.text : exp.textCeb}
+                              </p>
+                            </button>
+                          ))}
+                        </div>
+                      </section>
+                    );
+                  })}
                 </div>
               )}
 
@@ -879,9 +881,7 @@ export default function CcRedflag({
                     onClick={handlePrevious}
                     className="w-full sm:w-auto px-6 py-4 bg-transparent border border-white/30 text-white text-lg font-semibold rounded-xl hover:bg-white/10 transition-colors cursor-pointer"
                   >
-                    {language === "en"
-                      ? "← Choose another category"
-                      : "← Pagpili og laing kategorya"}
+                    {language === "en" ? "← Choose another symptom type" : "← Pagpili og laing matang sa sintomas"}
                   </button>
                 ) : (
                   <span />
@@ -894,8 +894,8 @@ export default function CcRedflag({
                     className="w-full sm:w-auto px-8 py-4 bg-cyan-900 border-2 border-cyan-400 text-white text-xl font-bold rounded-xl hover:bg-cyan-800 transition-colors shadow-lg cursor-pointer"
                   >
                     {language === "en"
-                      ? "NONE apply — Continue to Vital Signs →"
-                      : "WALA niini — Padayon sa Pagsukod sa Vital Sign →"}
+                      ? "None apply → Continue to Vital Signs"
+                      : "Walay mag-apply → Padayon sa Vital Signs"}
                   </button>
                 )}
 
@@ -906,134 +906,90 @@ export default function CcRedflag({
       )}
 
 
-      {/* STEP 2: EMERGENCY ALERT (silent, flashing red) */}
-      {screenStep === "emergency" && (
-        <div
-          role="alert"
-          className="bica-flash flex-1 flex flex-col items-center justify-center px-6 py-12 text-center w-full"
-        >
-          <div className="w-full max-w-4xl text-white">
-            <h3 className="text-5xl sm:text-7xl font-black mb-4 tracking-tight drop-shadow-lg">
-              {language === "en" ? "EMERGENCY" : "EMERHENSIYA"}
-            </h3>
-
-            <p className="text-2xl sm:text-3xl mb-8">
-              {language === "en" ? "Emergency symptom detected:" : "Nakit-an nga sintomas sa emerhensiya:"}{" "}
-              <span className="font-bold underline decoration-white">
-                {alertData.symptom}
-              </span>
-            </p>
-
-            <div className="mx-auto mb-8 w-fit rounded-2xl border-2 border-white bg-red-950 px-10 py-4 shadow-2xl">
-              <span className="block text-xs font-bold uppercase tracking-widest text-red-300">{language === "en" ? "Queue Number" : "Numero sa Pila"}</span>
-              <span className="block text-5xl sm:text-6xl font-black tracking-wider text-white">{alertData.ticketNumber}</span>
-            </div>
-
-            {alertData.patient && (
-              <div className="mx-auto mb-8 grid max-w-3xl gap-3 rounded-2xl border border-red-300/60 bg-red-950/80 p-5 text-left sm:grid-cols-2">
-                <p><span className="font-bold">{language === "en" ? "Patient" : "Pasyente"}:</span> {alertData.patient.firstName} {alertData.patient.lastName}</p>
-                <p><span className="font-bold">{language === "en" ? "Age" : "Edad"}:</span> {alertData.patient.ageDisplay} · {alertData.patient.ageGroup}</p>
-                <p><span className="font-bold">{language === "en" ? "Sex" : "Sekso"}:</span> {alertData.patient.gender}</p>
-                <p><span className="font-bold">{language === "en" ? "Contact" : "Kontak"}:</span> {alertData.patient.contactNumber}</p>
-              </div>
-            )}
-
-            <div className="bg-slate-950/90 p-10 rounded-2xl border border-red-500/50 max-w-2xl mx-auto shadow-inner flex flex-col items-center gap-8">
-              <p className="text-2xl sm:text-3xl font-bold leading-relaxed text-red-100">
-                {language === "en"
-                  ? "Please stay where you are. Staff has been alerted."
-                  : "Palihog pagpabilin sa imong nahimutangan. Gipahibalo na ang mga kawani."}
-              </p>
-
-              <button
-                onClick={() => setScreenStep("erTicket")}
-                className="w-full max-w-md bg-red-600 hover:bg-red-500 active:bg-red-700 text-white text-2xl font-bold py-5 px-8 rounded-xl shadow-[0_8px_25px_rgba(220,38,38,0.5)] transition-all active:scale-95 border border-red-300 flex items-center justify-center gap-4 cursor-pointer"
-              >
-                <span>{language === "en" ? "Continue to Print Ticket →" : "Padayon sa pag-imprinta sa tiket →"}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* STEP 3: TOP HALF = stay calm, BOTTOM HALF = receipt preview + printing */}
+      {/* Red-flag tickets use the same print-then-notice flow as critical vitals. */}
       {screenStep === "erTicket" && (
-        <div className="flex-1 flex flex-col w-full">
-          {/* TOP HALF: calm notification */}
-          <div className="flex-1 basis-0 min-h-0 flex flex-col items-center justify-center bg-gradient-to-b from-cyan-900 via-teal-900 to-teal-800 px-8 py-6 text-center">
-            <div className="relative mb-6 flex items-center justify-center">
-              <div className="bica-breathe absolute h-44 w-44 rounded-full bg-teal-300/20" />
-              <div className="bica-breathe absolute h-32 w-32 rounded-full bg-teal-200/30" style={{ animationDelay: "0.4s" }} />
-              <div className="relative flex h-20 w-20 items-center justify-center rounded-full bg-teal-100 text-3xl text-teal-900 shadow-xl">
-                ♥
-              </div>
-            </div>
-
-            <h2 className="mb-3 text-4xl font-extrabold text-white sm:text-6xl">
-              {language === "en" ? "Please stay calm and relax." : "Palihog kalma lang ug pagpahayahay."}
-            </h2>
-            <p className="max-w-4xl text-2xl font-semibold leading-relaxed text-teal-100 sm:text-4xl">
-              {language === "en"
-                ? "Our staff is coming to help you. Please wait here."
-                : "Padulong na ang among mga kawani aron motabang kanimo. Palihog paghulat dinhi."}
-            </p>
-            <p className="mt-3 max-w-4xl text-xl text-teal-200/90 sm:text-2xl">
-              {language === "en"
-                ? "Please remain calm. Our staff is on the way to help you."
-                : "Palihog kalma lang. Padulong na ang among mga kawani aron motabang kanimo."}
-            </p>
-          </div>
-
-          {/* BOTTOM HALF: small receipt preview + printing status */}
-          <div className="flex-1 basis-0 min-h-0 flex flex-row items-center justify-center gap-12 bg-red-950 border-t-4 border-red-500/60 px-8 py-6">
-            <div className="flex h-[30vh] items-center justify-center overflow-hidden rounded-lg bg-white shadow-2xl">
-              {receiptUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={receiptUrl}
-                  alt={language === "en" ? `Emergency ticket ${alertData.ticketNumber}` : `Tiket sa emerhensiya ${alertData.ticketNumber}`}
-                  className="h-full w-auto object-contain"
-                />
-              ) : (
-                <div className="flex h-full w-40 items-center justify-center px-3 text-center text-sm font-semibold text-gray-500">
-                  {language === "en" ? "Preparing ticket…" : "Giandam ang tiket…"}
-                </div>
-              )}
-            </div>
-
-            <div className="flex max-w-md flex-col items-start gap-4">
-              <p
-                className={`text-3xl font-black sm:text-4xl ${printStatus === "error"
-                  ? "text-yellow-300"
-                  : printStatus === "printed"
-                    ? "text-emerald-300"
-                    : "text-red-100"
-                  }`}
-              >
-                {statusText[printStatus]}
+        <main className="fixed inset-0 z-50 flex min-h-screen items-center justify-center overflow-y-auto bg-cyan-950 px-4 py-6 text-white sm:px-8">
+          {printStatus === "printed" ? (
+            <section role="status" aria-live="polite" className="w-full max-w-5xl py-10 text-center">
+              <h1 className="text-5xl font-extrabold leading-tight sm:text-6xl">
+                {language === "en" ? "Please stay where you are." : "Palihog pagpabilin sa imong nahimutangan."}
+              </h1>
+              <p className="mx-auto mt-8 max-w-4xl text-2xl leading-relaxed text-cyan-100 sm:text-3xl">
+                {language === "en" ? "Staff has been alerted." : "Gipahibalo na ang mga kawani."}
               </p>
-
-              {(printStatus === "generating" || printStatus === "printing") && (
-                <div className="h-3 w-full overflow-hidden rounded-full bg-red-900">
-                  <div className="bica-print-bar h-full w-1/3 rounded-full bg-red-400" />
-                </div>
+              {secondsUntilRestart > 0 && (
+                <p className="mt-8 text-xl font-semibold text-cyan-300">
+                  {language === "en" ? `New patient can start in ${secondsUntilRestart} seconds.` : `Makapagsugod ang bag-ong pasyente sulod sa ${secondsUntilRestart} segundo.`}
+                </p>
               )}
+              <button
+                type="button"
+                onClick={handleReset}
+                disabled={secondsUntilRestart > 0}
+                className="mx-auto mt-6 min-h-14 w-full max-w-xl rounded-lg bg-cyan-700 px-6 py-4 text-xl font-bold text-white hover:bg-cyan-600 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {language === "en" ? "Proceed / Start New Patient" : "Padayon / Sugdi ang Bag-ong Pasyente"}
+              </button>
+            </section>
+          ) : (
+            <section className="flex w-full max-w-5xl flex-col items-center gap-5" aria-label={language === "en" ? "Your ticket" : "Imong tiket"}>
+              <h1 className="text-center text-3xl font-bold sm:text-4xl">
+                {language === "en" ? "Your ticket" : "Imong tiket"}
+              </h1>
+              <div className="flex w-[80mm] max-w-full items-center justify-center overflow-hidden rounded-lg bg-white shadow-lg">
+                {alertStatus === "pending" ? (
+                  <p className="text-lg font-semibold text-slate-500">
+                    {language === "en" ? "Contacting staff…" : "Gipahibalo ang mga kawani…"}
+                  </p>
+                ) : alertStatus === "failed" ? (
+                  <p className="px-4 text-center text-lg font-semibold text-slate-500">
+                    {language === "en" ? "Please ask a staff member for help." : "Palihog pangayo og tabang sa usa ka kawani."}
+                  </p>
+                ) : receiptUrl ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={receiptUrl}
+                    alt={language === "en" ? `Emergency ticket ${alertData.ticketNumber}` : `Tiket sa emerhensiya ${alertData.ticketNumber}`}
+                    className="h-auto max-h-[70vh] w-full object-contain"
+                  />
+                ) : (
+                  <p className="text-lg font-semibold text-slate-500">
+                    {language === "en" ? "Preparing ticket…" : "Giandam ang tiket…"}
+                  </p>
+                )}
+              </div>
 
-              {receiptUrl && alertData.patient && (printStatus === "printed" || printStatus === "error") && (
+              {printStatus === "idle" && receiptUrl && alertData.patient && (
                 <button
                   type="button"
-                  onClick={() => {
-                    const patient = alertData.patient;
-                    if (patient) void doPrint(receiptUrl, { ...alertData, patient });
-                  }}
-                  className="rounded-xl border border-red-300 bg-red-600 px-6 py-2 text-lg font-bold text-white hover:bg-red-500 active:bg-red-700 cursor-pointer"
+                  onClick={() => void doPrint(receiptUrl, { ...alertData, patient: alertData.patient! })}
+                  className="inline-flex min-h-14 w-full max-w-md items-center justify-center gap-3 rounded-lg bg-emerald-700 px-6 py-3 text-xl font-bold text-white hover:bg-emerald-600"
                 >
-                  {language === "en" ? "Print again" : "I-imprinta pag-usab"}
+                  {language === "en" ? "Print ticket" : "I-imprinta ang tiket"}
                 </button>
               )}
-            </div>
-          </div>
-        </div>
+
+              {(printStatus === "generating" || printStatus === "printing") && (
+                <div role="status" className="w-full max-w-sm text-center">
+                  <p className="text-lg font-semibold text-cyan-100">{statusText[printStatus]}</p>
+                  <div className="mt-3 h-2.5 w-full overflow-hidden rounded-full bg-cyan-900">
+                    <div className="bica-print-bar h-full w-1/3 rounded-full bg-emerald-500" />
+                  </div>
+                </div>
+              )}
+
+              {printStatus === "error" && receiptUrl && alertData.patient && (
+                <button
+                  type="button"
+                  onClick={() => void doPrint(receiptUrl, { ...alertData, patient: alertData.patient! })}
+                  className="rounded-lg bg-emerald-700 px-6 py-3 font-bold text-white hover:bg-emerald-600"
+                >
+                  {language === "en" ? "Try printing again" : "Sulayi pag-imprinta pag-usab"}
+                </button>
+              )}
+            </section>
+          )}
+        </main>
       )}
 
       {/* FOOTER */}

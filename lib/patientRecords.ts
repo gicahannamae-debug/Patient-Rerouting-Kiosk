@@ -14,7 +14,6 @@ import {
 } from "firebase/firestore";
 import { db } from "@/lib/firebase";
 import type { ClinicOption } from "@/Component/primaryClinics";
-import type { NEWS2Result } from "@/lib/news2";
 import type { PatientAgeGroup } from "@/lib/patientDemographics";
 
 export type ClinicCode = "SUR" | "PED" | "OBG" | "IM" | "ER";
@@ -28,7 +27,6 @@ export type PatientStatus =
 export interface PatientVitals {
   bp: string | null;
   hr: number | null;
-  rr: number | null;
   temp: number | null;
   spo2: number | null;
 }
@@ -51,7 +49,7 @@ export interface QueuePatient {
   contactNumber: string;
   chiefComplaints: PatientComplaint[];
   vitals: PatientVitals;
-  news2?: NEWS2Result;
+  emergencySource?: "RED_FLAG";
   category: PatientCategory;
   clinic: ClinicCode;
   status: PatientStatus;
@@ -70,7 +68,7 @@ export interface NewQueuePatient {
   contactNumber: string;
   complaint: PatientComplaint;
   vitals: PatientVitals;
-  news2: NEWS2Result;
+  emergencySource?: "RED_FLAG";
   category: PatientCategory;
 }
 
@@ -136,6 +134,7 @@ export function parseQueuePatient(id: string, data: DocumentData): QueuePatient 
     !VALID_CATEGORIES.includes(data.category as PatientCategory) ||
    !VALID_STATUSES.includes(data.status as PatientStatus) ||
     typeof data.queueNumber !== "number" ||
+    (data.emergencySource !== undefined && data.emergencySource !== "RED_FLAG") ||
     !Array.isArray(data.chiefComplaints) ||
     !data.vitals ||
     typeof data.vitals !== "object"
@@ -170,39 +169,6 @@ export function parseQueuePatient(id: string, data: DocumentData): QueuePatient 
     throw new Error(`Invalid patient record: ${id} has invalid blood pressure.`);
   }
 
-  let news2: NEWS2Result | undefined;
-  if (data.news2 !== undefined) {
-    const value = data.news2;
-    if (
-      typeof value !== "object" ||
-      value === null ||
-      typeof value.total !== "number" ||
-      typeof value.complete !== "boolean" ||
-      !Array.isArray(value.missingParameters) ||
-      !value.missingParameters.every((item: unknown) => typeof item === "string") ||
-      !Array.isArray(value.criticalParameters) ||
-      !value.criticalParameters.every((item: unknown) => typeof item === "string") ||
-      !["EMERGENCY", "URGENT", "PRIORITY", "REGULAR"].includes(value.route) ||
-      typeof value.components !== "object" ||
-      value.components === null
-    ) {
-      throw new Error(`Invalid patient record: ${id} has an invalid NEWS2 result.`);
-    }
-    const scoreValues = [
-      value.components.respiratoryRate,
-      value.components.oxygenSaturation,
-      value.components.systolicBloodPressure,
-      value.components.pulseRate,
-      value.components.consciousness,
-      value.components.temperature,
-      value.components.supplementalOxygen,
-    ];
-    if (!scoreValues.every((score: unknown) => score === null || (typeof score === "number" && Number.isInteger(score) && score >= 0 && score <= 3))) {
-      throw new Error(`Invalid patient record: ${id} has invalid NEWS2 parameter scores.`);
-    }
-    news2 = value as NEWS2Result;
-  }
-
   return {
     id,
     ticketCode: data.ticketCode,
@@ -222,11 +188,10 @@ export function parseQueuePatient(id: string, data: DocumentData): QueuePatient 
     vitals: {
       bp: data.vitals.bp,
       hr: readNullableNumber(data.vitals.hr, "vitals.hr"),
-      rr: readNullableNumber(data.vitals.rr, "vitals.rr"),
       temp: readNullableNumber(data.vitals.temp, "vitals.temp"),
       spo2: readNullableNumber(data.vitals.spo2, "vitals.spo2"),
     },
-    ...(news2 ? { news2 } : {}),
+    ...(data.emergencySource === "RED_FLAG" ? { emergencySource: "RED_FLAG" as const } : {}),
     category: data.category as PatientCategory,
     clinic: data.clinic,
     status: data.status,
@@ -276,7 +241,7 @@ export async function createQueuePatient(input: NewQueuePatient): Promise<Create
       contactNumber: input.contactNumber,
       chiefComplaints: [input.complaint],
       vitals: input.vitals,
-      news2: input.news2,
+      ...(input.emergencySource ? { emergencySource: input.emergencySource } : {}),
       category: input.category,
       clinic,
       status: "waiting",

@@ -3,58 +3,129 @@ import React, { useMemo, useState } from "react";
 import KioskHeader from "@/Component/kioskHeader";
 import type { KioskLanguage } from "@/lib/kioskLanguage";
 
-const TEMPERATURE_CATEGORIES = [
-  { label: "🔴 CRITICAL LOW", range: "< 32.0 °C", min: Number.NEGATIVE_INFINITY, max: 32.0, color: "bg-red-600" },
-  { label: "Hypothermia", range: "32.0 – 34.9 °C", min: 32.0, max: 35.0, color: "bg-blue-400" },
-  { label: "Below normal", range: "35.0 – 36.4 °C", min: 35.0, max: 36.5, color: "bg-cyan-400" },
-  { label: "Normal", range: "36.5 – 37.5 °C", min: 36.5, max: 37.6, color: "bg-green-400" },
-  { label: "Elevated", range: "37.6 – 37.9 °C", min: 37.6, max: 38.0, color: "bg-yellow-400" },
-  { label: "Low-grade Fever", range: "38.0 – 38.9 °C", min: 38.0, max: 39.0, color: "bg-orange-400" },
-  { label: "High Fever", range: "39.0 – 40.0 °C", min: 39.0, max: 40.1, color: "bg-orange-500" },
-  { label: "🔴 CRITICAL HIGH", range: "> 40.0 °C", min: 40.1, max: Number.POSITIVE_INFINITY, color: "bg-red-600" },
+export type TempQueue = "ER" | "URGENT" | "NORMAL";
+
+type TempCategory = {
+  label: string;
+  range: string;
+  min: number; // inclusive
+  max: number; // exclusive
+  queue: TempQueue;
+  color: "red" | "orange" | "green";
+};
+
+// Clinic-side only. These labels are never shown to the patient.
+const TEMPERATURE_CATEGORIES: TempCategory[] = [
+  { label: "Critically Low", range: "< 35.0 °C", min: Number.NEGATIVE_INFINITY, max: 35.0, queue: "ER", color: "red" },
+  { label: "Borderline Low", range: "35.0 – 36.0 °C", min: 35.0, max: 36.1, queue: "URGENT", color: "orange" },
+  { label: "Normal", range: "36.1 – 37.2 °C", min: 36.1, max: 37.3, queue: "NORMAL", color: "green" },
+  { label: "Borderline High", range: "37.3 – 37.9 °C", min: 37.3, max: 38.0, queue: "URGENT", color: "orange" },
+  // Assumption: 38.0 – 40.0 had no row, so it is treated as Critically High (ER).
+  { label: "Critically High", range: "≥ 38.0 °C", min: 38.0, max: Number.POSITIVE_INFINITY, queue: "ER", color: "red" },
 ];
+
+export interface TemperatureResult {
+  temperature: string;
+  category: string;
+  queue: TempQueue;
+  color: "red" | "orange" | "green";
+  /** True when a Normal reading was upgraded to URGENT because of patient status. */
+  priorityOverride: boolean;
+}
 
 interface VsTemperatureProps {
   language: KioskLanguage;
+  /** True for PWD, senior, pregnant, or any other priority status. */
+  isPriorityPatient?: boolean;
+  /** Previously entered value (from the parent) so it reappears when the patient comes back. */
+  initialTemperature?: string;
   onLogout?: () => void;
-  onProceed?: (values: { temperature: string }) => void;
+  onProceed?: (values: TemperatureResult) => void;
   onNavigateStep?: (step: number) => void;
   onNavigateVitalPart?: (part: number) => void;
 }
 
 export default function VsTemperature({
   language,
+  isPriorityPatient = false,
+  initialTemperature = "",
   onLogout,
   onProceed,
   onNavigateStep,
   onNavigateVitalPart,
 }: VsTemperatureProps) {
-  const [temperature, setTemperature] = useState("");
-  const [keypadOpen, setKeypadOpen] = useState(false);
+  const [temperature, setTemperature] = useState(initialTemperature);
+  // True while a prefilled value is untouched: the first keypad tap starts fresh
+  // instead of appending to the old reading.
+  const [fresh, setFresh] = useState(initialTemperature !== "");
   const [showConfirmPopup, setShowConfirmPopup] = useState(false);
   const isCebuano = language === "ceb";
 
   const temperatureValue = parseFloat(temperature);
   const isValidTemperature = !Number.isNaN(temperatureValue) && temperatureValue >= 30 && temperatureValue <= 45;
 
-  const category = useMemo(() => {
+  // Clinic-side classification and queue routing (not displayed to the patient)
+  const routing = useMemo<TemperatureResult | null>(() => {
     if (!isValidTemperature) return null;
-    return TEMPERATURE_CATEGORIES.find((item) => temperatureValue >= item.min && temperatureValue < item.max) ?? null;
-  }, [temperatureValue, isValidTemperature]);
+
+    const category = TEMPERATURE_CATEGORIES.find(
+      (item) => temperatureValue >= item.min && temperatureValue < item.max
+    );
+    if (!category) return null;
+
+    // Critical -> ER always. Normal + priority patient -> URGENT.
+    const priorityOverride = category.queue === "NORMAL" && isPriorityPatient;
+    const queue: TempQueue = priorityOverride ? "URGENT" : category.queue;
+    const color = priorityOverride ? "orange" : category.color;
+
+    return {
+      temperature: temperatureValue.toFixed(1),
+      category: category.label,
+      queue,
+      color,
+      priorityOverride,
+    };
+  }, [temperatureValue, isValidTemperature, isPriorityPatient]);
 
   const updateTemperature = (value: string) => {
+    const base = fresh ? "" : temperature;
+    setFresh(false);
+
     if (value === ".") {
       // needs at least one digit, max two digits before the point, only one point
-      if (temperature.includes(".") || temperature.length === 0 || temperature.length > 2) return;
-      setTemperature(`${temperature}.`);
-    } else if (temperature.includes(".")) {
+      if (base.includes(".") || base.length === 0 || base.length > 2) {
+        setTemperature(base);
+        return;
+      }
+      setTemperature(`${base}.`);
+    } else if (base.includes(".")) {
       // only one decimal digit
-      if (temperature.split(".")[1].length >= 1) return;
-      setTemperature(`${temperature}${value}`);
+      if (base.split(".")[1].length >= 1) {
+        setTemperature(base);
+        return;
+      }
+      setTemperature(`${base}${value}`);
     } else {
-      if (temperature.length >= 2) return;
-      setTemperature(`${temperature}${value}`);
+      if (base.length >= 2) {
+        setTemperature(base);
+        return;
+      }
+      setTemperature(`${base}${value}`);
     }
+  };
+
+  const clearTemperature = () => {
+    setFresh(false);
+    setTemperature("");
+  };
+
+  const backspaceTemperature = () => {
+    if (fresh) {
+      setFresh(false);
+      setTemperature((value) => value.slice(0, -1));
+      return;
+    }
+    setTemperature((value) => value.slice(0, -1));
   };
 
   return (
@@ -117,7 +188,6 @@ export default function VsTemperature({
               onSubmit={(e) => {
                 e.preventDefault();
                 if (!isValidTemperature) return;
-                setKeypadOpen(false);
                 setShowConfirmPopup(true);
               }}
               className="flex flex-col gap-[1rem]"
@@ -130,66 +200,33 @@ export default function VsTemperature({
                   type="text"
                   inputMode="none"
                   readOnly
-                  placeholder={isCebuano ? "Pislita aron mosulod" : "Tap to enter"}
+                  placeholder={isCebuano ? "Gamita ang keypad sa ubos" : "Use the keypad below"}
                   value={temperature}
-                  onClick={() => {
-                    // Start fresh so old digits are never appended
-                    setTemperature("");
-                    setKeypadOpen(true);
-                  }}
+                  onClick={clearTemperature}
                   aria-label={isCebuano ? "Temperatura sa Celsius" : "Temperature in Celsius"}
-                  className={`text-[1rem] text-cyan-950 border ${keypadOpen ? "border-orange-400 ring-2 ring-orange-300" : "border-stone-300"} bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none cursor-pointer`}
+                  className={`text-[1rem] text-cyan-950 border ${!fresh ? "border-orange-400 ring-2 ring-orange-300" : "border-stone-300"} bg-orange-50 rounded-sm px-[0.5rem] py-[0.4rem] focus:outline-none cursor-pointer`}
                 />
+                {temperature !== "" && !isValidTemperature && (
+                  <p className="text-[0.95rem] text-yellow-300">
+                    {isCebuano
+                      ? "Isulod ang husto nga temperatura tali sa 30.0 ug 45.0 °C."
+                      : "Please enter a valid temperature between 30.0 and 45.0 °C."}
+                  </p>
+                )}
               </section>
 
-              {keypadOpen && (
-                <section className="rounded-xl border border-cyan-600 bg-cyan-900 p-4">
-                  <div className="mb-3 flex items-center justify-between gap-2">
-                    <h3 className="text-lg font-bold text-white">{isCebuano ? "Keypad sa Temperatura" : "Temperature Keypad"}</h3>
-                    <button type="button" onClick={() => setKeypadOpen(false)} className="rounded-md bg-cyan-800 px-3 py-2 text-sm font-semibold text-white hover:bg-cyan-700">
-                      {isCebuano ? "Human" : "Done"}
-                    </button>
-                  </div>
-                  <p className="mb-3 text-center text-sm text-cyan-200">{isCebuano ? "Gitugot nga sukod: 30.0–45.0 °C" : "Allowed range: 30.0–45.0 °C"}</p>
-                  <div className="grid grid-cols-3 gap-2">
-                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
-                      <button key={digit} type="button" onClick={() => updateTemperature(digit)} className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 active:bg-orange-300">{digit}</button>
-                    ))}
-                    <button type="button" onClick={() => setTemperature("")} className="min-h-14 rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-500">{isCebuano ? "Haw-asa" : "Clear"}</button>
-                    <button type="button" onClick={() => updateTemperature("0")} className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200">0</button>
-                    <button type="button" onClick={() => updateTemperature(".")} className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200">.</button>
-                    <button type="button" onClick={() => setTemperature((value) => value.slice(0, -1))} aria-label={isCebuano ? "Tangtanga ang kataposang numero" : "Delete last digit"} className="col-span-3 min-h-14 rounded-lg bg-cyan-700 text-xl font-bold text-white hover:bg-cyan-600">⌫</button>
-                  </div>
-                </section>
-              )}
-
-              {/* Patient Temperature Results */}
-              <div className="flex flex-col gap-[0.75rem] bg-cyan-950 rounded-lg px-[0.9rem] py-[0.9rem]">
-                <div className="text-center">
-                  <p className="text-[0.78rem] font-semibold text-cyan-300 uppercase tracking-wider">{isCebuano ? "Resulta sa Temperatura sa Pasyente" : "Patient Temperature Results"}</p>
+              {/* KEYPAD: always visible, no title row and no Done button */}
+              <section className="rounded-xl border border-cyan-600 bg-cyan-900 p-3">
+                <div className="grid grid-cols-3 gap-2">
+                  {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map((digit) => (
+                    <button key={digit} type="button" onClick={() => updateTemperature(digit)} className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200 active:bg-orange-300">{digit}</button>
+                  ))}
+                  <button type="button" onClick={clearTemperature} className="min-h-14 rounded-lg bg-red-600 text-sm font-bold text-white hover:bg-red-500">{isCebuano ? "Haw-asa" : "Clear"}</button>
+                  <button type="button" onClick={() => updateTemperature("0")} className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200">0</button>
+                  <button type="button" onClick={() => updateTemperature(".")} className="min-h-14 rounded-lg border border-cyan-700 bg-orange-50 text-2xl font-bold text-cyan-950 hover:bg-orange-200">.</button>
+                  <button type="button" onClick={backspaceTemperature} aria-label={isCebuano ? "Tangtanga ang kataposang numero" : "Delete last digit"} className="col-span-3 min-h-14 rounded-lg bg-cyan-700 text-xl font-bold text-white hover:bg-cyan-600">⌫</button>
                 </div>
-                <div className="rounded-lg border border-cyan-600 bg-cyan-900 p-[1rem] text-white">
-                  {temperature === "" ? (
-                    <p className="text-[0.95rem] text-cyan-300">{isCebuano ? "Isulod ang temperatura aron makita ang resulta dinhi." : "Enter a temperature to see the result here."}</p>
-                  ) : !isValidTemperature ? (
-                    <p className="text-[0.95rem] text-yellow-300">{isCebuano ? "Isulod ang husto nga temperatura tali sa 30.0 ug 45.0 °C." : "Please enter a valid temperature between 30.0 and 45.0 °C."}</p>
-                  ) : (
-                    <>
-                      <p className="text-[0.95rem]">{isCebuano ? "Temperatura" : "Temperature"}: <span className="font-semibold text-white">{temperatureValue.toFixed(1)} °C</span></p>
-                      <p className="text-[0.95rem]">{isCebuano ? "Resulta" : "Result"}: <span className="font-bold text-white">{category ? (isCebuano ? ({
-                        "🔴 CRITICAL LOW": "🔴 UBOS KAAYO",
-                        Hypothermia: "Ubos kaayo ang temperatura sa lawas",
-                        "Below normal": "Ubos sa normal",
-                        Normal: "Normal",
-                        Elevated: "Medyo Taas",
-                        "Low-grade Fever": "Gamay nga Hilanat",
-                        "High Fever": "Taas nga Hilanat",
-                        "🔴 CRITICAL HIGH": "🔴 TAAS KAAYO",
-                      }[category.label] ?? category.label) : category.label) : "Unknown"}</span></p>
-                    </>
-                  )}
-                </div>
-              </div>
+              </section>
 
               {/* Buttons */}
               <div className="flex justify-center gap-[0.8rem] pt-[0.25rem]">
@@ -237,7 +274,7 @@ export default function VsTemperature({
                       type="button"
                       onClick={() => {
                         setShowConfirmPopup(false);
-                        onProceed?.({ temperature: temperatureValue.toFixed(1) });
+                        if (routing) onProceed?.(routing);
                       }}
                       className="rounded-lg bg-orange-50 px-6 py-3 text-lg font-bold text-cyan-950 hover:bg-orange-100"
                     >
