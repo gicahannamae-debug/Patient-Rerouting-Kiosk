@@ -442,19 +442,19 @@ export default function CcRedflag({
   // Group symptoms by their context (Pediatrics → OB-GYN → Internal Medicine → Surgery)
   const experienceGroups = selectedCategory
     ? Object.values(
-        selectedCategory.experiences.reduce<
-          Record<string, { clinics: ClinicName[]; experiences: Experience[] }>
-        >((groups, exp) => {
-          const key = exp.clinics.join("|");
-          if (!groups[key]) groups[key] = { clinics: exp.clinics, experiences: [] };
-          groups[key].experiences.push(exp);
-          return groups;
-        }, {})
-      ).sort((a, b) => {
-        const rank = (g: { clinics: ClinicName[] }) =>
-          Math.min(...g.clinics.map(c => CLINIC_ORDER.indexOf(c)));
-        return rank(a) - rank(b) || a.clinics.length - b.clinics.length;
-      })
+      selectedCategory.experiences.reduce<
+        Record<string, { clinics: ClinicName[]; experiences: Experience[] }>
+      >((groups, exp) => {
+        const key = exp.clinics.join("|");
+        if (!groups[key]) groups[key] = { clinics: exp.clinics, experiences: [] };
+        groups[key].experiences.push(exp);
+        return groups;
+      }, {})
+    ).sort((a, b) => {
+      const rank = (g: { clinics: ClinicName[] }) =>
+        Math.min(...g.clinics.map(c => CLINIC_ORDER.indexOf(c)));
+      return rank(a) - rank(b) || a.clinics.length - b.clinics.length;
+    })
     : [];
 
   // ── Printing ────────────────────────────────────────────────────────────────
@@ -532,7 +532,12 @@ export default function CcRedflag({
         sessionStorage.setItem("bica_emergency", JSON.stringify({ symptom: exp.text, ticketNumber: queuedTicketCode }));
       }
     } catch (error) {
-      console.error("Red-flag staff alert failed:", error);
+      console.error("Red-flag staff alert failed:", {
+        error,
+        code: (error as { code?: string })?.code,
+        message: (error as { message?: string })?.message,
+      });
+
       setAlertStatus("failed");
     }
   };
@@ -601,9 +606,8 @@ export default function CcRedflag({
 
   return (
     <div
-      className={`min-h-screen flex flex-col justify-between font-sans ${
-        screenStep === "welcome" ? "bg-slate-950" : "bg-cyan-950"
-      }`}
+      className={`min-h-screen flex flex-col justify-between font-sans ${screenStep === "welcome" ? "bg-slate-950" : "bg-cyan-950"
+        }`}
     >
       <style>{`
         @keyframes bica-flash {
